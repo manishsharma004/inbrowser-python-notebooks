@@ -52,7 +52,7 @@ Grounded architecture lives in **`archify.md`** (regenerate with `npm run archif
 |------|--------|
 | Default feature branch | `cursor-agent/monaco-editor-intellisense-9cc7` |
 | Compare (branch vs `main`) | https://github.com/manishsharma004/inbrowser-python-notebooks/compare/main...cursor-agent/monaco-editor-intellisense-9cc7 |
-| Note | **#3** was merged at `e9ebb02`. Follow-up work: **#4** ← `cursor-agent/monaco-editor-intellisense-9cc7` vs `main`. |
+| Note | **#3** merged at `e9ebb02`. **#4** merged 2026-09-17. Open follow-up: **#5** ← Archify + completion sort on this branch. |
 
 ### UI / manual checks
 
