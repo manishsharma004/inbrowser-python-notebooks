@@ -39,12 +39,17 @@ Grounded architecture lives in **`archify.md`** (regenerate with `npm run archif
 
 - **Do not launch subagents** (no `Task` tool / `computerUse`, `explore`, `debug`, etc.). Do all work in the main agent session.
 - **Verify in chat:** use the terminal only (`npm run check`, `npm test`, `npm run build`, `curl` against the dev URL). Do not use browser automation or computer-use for testing unless the user explicitly asks.
-- **Minimize external API usage:** avoid GitHub REST/GraphQL and other MCP calls when git/CLI in the shell is enough (e.g. prefer `git push` + user-opened PR links over creating PRs via API). Do not call `cursor-cloud` diagnostics unless the user asks.
-- **Pull request status (required when working on a feature branch or when the user mentions “PR” / “update pr”):** before wrapping up and after pushing, confirm GitHub state for the **current** PR — do not assume an old PR number still applies after merge.
-  1. **Git (local):** `git fetch origin main <branch>` then `git log --oneline origin/main..HEAD` (commits not on `main`) and `git status` (clean, pushed).
-  2. **GitHub (preferred if `gh` is authenticated):** `gh pr list --head "$(git branch --show-current)"` and `gh pr view <number> --json state,mergeable,statusCheckRollup,url,mergedAt`.
-  3. **GitHub (no `gh`):** public API or compare URL — e.g. open PRs for head branch: `https://api.github.com/repos/manishsharma004/inbrowser-python-notebooks/pulls?state=open&head=manishsharma004:<branch>`; compare: `https://github.com/manishsharma004/inbrowser-python-notebooks/compare/main...<branch>`.
-  4. **Report in the agent reply:** PR `#`, **open / merged / closed**, link, whether head is pushed, CI/check summary if available, and commits ahead of `main`. If the previous PR was **merged** and the branch still has new commits, say clearly that a **new PR** is needed (link the compare URL); do not tell the user “PR updated” when there is no open PR.
+- **Minimize external API usage:** avoid GitHub REST/GraphQL and other MCP calls when git/CLI in the shell is enough. **Exception:** when the user asks to **update/create a PR**, or when the feature branch has commits ahead of `main` and needs review, use `gh` or the GitHub API to **open a PR if none exists** (see below). Do not call `cursor-cloud` diagnostics unless the user asks.
+- **Rebase, push, and PR (required when the user mentions “PR”, “update pr”, “rebase and update”, or you finish feature work on a branch):**
+  1. **Git:** `git fetch origin main` → `git rebase origin/main` (resolve conflicts) → run checks if code changed → `git push -u origin <branch>` (use `--force-with-lease` after rebase when needed).
+  2. **Open PR if missing:** After push, check for an **open** PR whose head is the current branch (`gh pr list --head "$(git branch --show-current)"`, or GET `.../pulls?state=open&head=manishsharma004:<branch>`). If **no open PR** and `git log origin/main..HEAD` is non-empty, **create one** (`gh pr create --base main --head <branch> --fill`, or POST `/repos/.../pulls` with title/body summarizing commits and test plan). Do **not** stop at “branch updated” or only share a compare URL when the user wanted a PR.
+  3. **If an open PR exists:** treat “update pr” as rebase + push so the existing PR’s diff refreshes; optionally edit title/body if the scope changed materially.
+  4. **If the last PR for this branch was merged** but the branch has **new** commits on top of `main`, that is a **new** PR — create it; do not assume the old number still applies.
+- **Pull request status (report before wrapping up):** confirm GitHub state for the **current** open PR (or the one you just created).
+  1. **Git (local):** `git log --oneline origin/main..HEAD`, `git status` (clean, pushed).
+  2. **GitHub (preferred if `gh` is authenticated):** `gh pr view <number> --json state,mergeable,statusCheckRollup,url,mergedAt`.
+  3. **GitHub (no `gh`):** open PRs API for head branch; compare URL: `https://github.com/manishsharma004/inbrowser-python-notebooks/compare/main...<branch>`.
+  4. **Report in the agent reply:** PR `#`, **open / merged / closed**, link, whether head is pushed, CI/check summary if available, commits ahead of `main`. Never say “PR updated” when there is no open PR.
 
 ### Pull requests (this repo)
 
@@ -52,7 +57,8 @@ Grounded architecture lives in **`archify.md`** (regenerate with `npm run archif
 |------|--------|
 | Default feature branch | `cursor-agent/monaco-editor-intellisense-9cc7` |
 | Compare (branch vs `main`) | https://github.com/manishsharma004/inbrowser-python-notebooks/compare/main...cursor-agent/monaco-editor-intellisense-9cc7 |
-| Note | **#3** merged at `e9ebb02`. **#4** merged 2026-09-17. Open follow-up: **#5** ← Archify + completion sort on this branch. |
+| Open PR | **#5** — https://github.com/manishsharma004/inbrowser-python-notebooks/pull/5 |
+| Note | **#3** merged at `e9ebb02`. **#4** merged 2026-09-17. Agents must **create** a new PR when the prior one merged and the branch still has commits (see Agent behavior). |
 
 ### UI / manual checks
 
