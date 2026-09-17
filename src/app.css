@@ -374,7 +374,11 @@ button:disabled {
 	border: 1px solid var(--border);
 	border-radius: 2px;
 	background: var(--cell-bg);
-	overflow: hidden;
+	overflow: visible;
+}
+
+.nb-monaco-wrap .monaco-editor {
+	border-radius: 2px;
 }
 
 .nb-monaco-wrap:focus-within {

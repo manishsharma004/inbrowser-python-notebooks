@@ -339,7 +339,8 @@ export async function createMonacoEditor(container, initialValue, options = {}) 
 		cursorSmoothCaretAnimation: 'on',
 		smoothScrolling: true,
 		readOnly: options.readOnly ?? false,
-		ariaLabel: 'Python code cell'
+		ariaLabel: 'Python code cell',
+		fixedOverflowWidgets: true
 	});
 
 	const resize = () => {
