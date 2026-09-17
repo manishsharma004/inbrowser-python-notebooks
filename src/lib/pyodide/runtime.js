@@ -74,7 +74,8 @@ import os
 _NB_SKIP_GLOBALS = set(dir(builtins)) | {
     "builtins", "json", "os", "pickle", "base64", "_NB_SKIP_GLOBALS",
     "nb_list_user_globals", "nb_list_environ", "nb_completion_snapshot",
-    "nb_export_pickle_checkpoint", "nb_import_pickle_checkpoint"
+    "nb_export_pickle_checkpoint", "nb_import_pickle_checkpoint",
+    "nb_merge_pickle_checkpoint"
 }
 
 def nb_list_user_globals():
@@ -156,6 +157,34 @@ def nb_import_pickle_checkpoint(b64_text):
         except Exception:
             failed.append(name)
     return json.dumps({"restored": restored, "failed": failed, "error": None})
+
+def nb_merge_pickle_checkpoint(b64_text, overwrite_names="0"):
+    import pickle
+    import base64
+
+    overwrite = str(overwrite_names).lower() in ("1", "true", "yes")
+    restored = []
+    failed = []
+    skipped = []
+    try:
+        payload = pickle.loads(base64.b64decode(b64_text))
+    except Exception as exc:
+        return json.dumps({"restored": restored, "failed": failed, "skipped": skipped, "error": str(exc)})
+
+    user_globals = set(nb_list_user_globals().keys())
+
+    for name, blob in payload.items():
+        if name.startswith("_") or name in _NB_SKIP_GLOBALS:
+            continue
+        if not overwrite and name in user_globals:
+            skipped.append(name)
+            continue
+        try:
+            globals()[name] = pickle.loads(blob)
+            restored.append(name)
+        except Exception:
+            failed.append(name)
+    return json.dumps({"restored": restored, "failed": failed, "skipped": skipped, "error": None})
 `);
 
 	return sessionHelpersPromise;
@@ -314,6 +343,45 @@ export async function importKernelCheckpoint(checkpoint) {
 	return {
 		restored: Array.isArray(raw.restored) ? raw.restored : [],
 		failed: Array.isArray(raw.failed) ? raw.failed : [],
+		error: raw.error ?? null
+	};
+}
+
+/**
+ * @typedef {Object} KernelMergeResult
+ * @property {string[]} restored
+ * @property {string[]} failed
+ * @property {string[]} skipped
+ * @property {string | null} error
+ */
+
+/**
+ * Merge another notebook's pickle checkpoint into the live kernel.
+ * @param {string} checkpoint
+ * @param {boolean} [overwriteExisting]
+ * @returns {Promise<KernelMergeResult>}
+ */
+export async function mergeKernelCheckpoint(checkpoint, overwriteExisting = false) {
+	const pyodide = await ensurePythonRuntime();
+	await installSessionHelpers(pyodide);
+	pyodide.globals.set('_nb_checkpoint_b64', checkpoint);
+	pyodide.globals.set('_nb_merge_overwrite', overwriteExisting ? '1' : '0');
+	const jsonText = /** @type {string} */ (
+		pyodide.runPython(
+			'nb_merge_pickle_checkpoint(_nb_checkpoint_b64, _nb_merge_overwrite)'
+		)
+	);
+	pyodide.runPython('del _nb_checkpoint_b64, _nb_merge_overwrite');
+	const raw = /** @type {{
+		restored?: string[];
+		failed?: string[];
+		skipped?: string[];
+		error?: string | null;
+	}} } */ (JSON.parse(jsonText));
+	return {
+		restored: Array.isArray(raw.restored) ? raw.restored : [],
+		failed: Array.isArray(raw.failed) ? raw.failed : [],
+		skipped: Array.isArray(raw.skipped) ? raw.skipped : [],
 		error: raw.error ?? null
 	};
 }

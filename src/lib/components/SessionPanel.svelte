@@ -14,6 +14,11 @@
 	 * @property {() => void | Promise<void>} [onrestorecheckpoint]
 	 * @property {() => void | Promise<void>} [onreplayjournal]
 	 * @property {() => void | Promise<void>} [onclearsession]
+	 * @property {{ id: string; name: string }[]} [otherNotebooks]
+	 * @property {string} [importSourceId]
+	 * @property {(sourceId: string) => void} [onimportsourcechange]
+	 * @property {() => void | Promise<void>} [onimportvariables]
+	 * @property {() => void | Promise<void>} [onimportvariablesoverwrite]
 	 */
 
 	/** @type {Props} */
@@ -30,7 +35,12 @@
 		onsavecheckpoint,
 		onrestorecheckpoint,
 		onreplayjournal,
-		onclearsession
+		onclearsession,
+		otherNotebooks = [],
+		importSourceId = '',
+		onimportsourcechange,
+		onimportvariables,
+		onimportvariablesoverwrite
 	} = $props();
 
 	let tab = $state(/** @type {'globals' | 'environ'} */ ('globals'));
@@ -47,8 +57,8 @@
 	<div class="nb-session__head">
 		<h2>Session</h2>
 		<p class="nb-session__hint">
-			Variables persist while this tab is open. Saved checkpoints + execution journal survive reload
-			(pickle + replay — not a full WASM snapshot).
+			Each notebook file has its own saved session (checkpoint + journal). Switching files saves the
+			current kernel and loads that notebook's variables when possible.
 		</p>
 		<div class="nb-session__actions">
 			<button type="button" class="nb-chip" disabled={loading} onclick={() => onrefresh?.()}>
@@ -82,6 +92,43 @@
 				Clear saved session
 			</button>
 		</div>
+		{#if otherNotebooks.length > 0}
+			<div class="nb-session__import">
+				<label class="nb-session__import-label" for="nb-import-session-select">
+					Import variables from
+				</label>
+				<select
+					id="nb-import-session-select"
+					class="nb-session__import-select"
+					disabled={loading}
+					value={importSourceId}
+					onchange={(event) => onimportsourcechange?.(event.currentTarget.value)}
+				>
+					<option value="">Choose notebook…</option>
+					{#each otherNotebooks as nb (nb.id)}
+						<option value={nb.id}>{nb.name}</option>
+					{/each}
+				</select>
+				<div class="nb-session__actions">
+					<button
+						type="button"
+						class="nb-chip"
+						disabled={loading || !importSourceId}
+						onclick={() => onimportvariables?.()}
+					>
+						Import (keep existing)
+					</button>
+					<button
+						type="button"
+						class="nb-chip nb-chip--warn"
+						disabled={loading || !importSourceId}
+						onclick={() => onimportvariablesoverwrite?.()}
+					>
+						Import (overwrite)
+					</button>
+				</div>
+			</div>
+		{/if}
 		<p class="nb-session__status">
 			{#if loading}
 				Kernel busy…
