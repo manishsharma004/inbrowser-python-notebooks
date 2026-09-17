@@ -351,6 +351,23 @@ button:disabled {
 	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--run) 25%, transparent);
 }
 
+.nb-monaco-wrap {
+	border: 1px solid var(--border);
+	border-radius: 2px;
+	background: var(--cell-bg);
+	overflow: hidden;
+}
+
+.nb-monaco-wrap:focus-within {
+	border-color: var(--border-strong);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--run) 25%, transparent);
+}
+
+.nb-monaco {
+	width: 100%;
+	min-height: 4.5rem;
+}
+
 .nb-output {
 	margin: 0.4rem 0 0;
 	padding: 0.55rem 0.75rem;

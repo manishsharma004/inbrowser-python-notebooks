@@ -10,6 +10,7 @@
 	} from '$lib/vfs/indexedDbVfs.js';
 	import { parseNotebook, serializeNotebook } from '$lib/notebook/parseNotebook.js';
 	import { runPythonSource } from '$lib/pyodide/runtime.js';
+	import MonacoCodeCell from '$lib/components/MonacoCodeCell.svelte';
 
 	/** @type {import('$lib/vfs/types.js').VfsSnapshot | null} */
 	let snapshot = $state(null);
@@ -175,13 +176,13 @@
 										spellcheck="false"
 									></textarea>
 								{:else}
-									<textarea
-										class="nb-editor"
+									<MonacoCodeCell
 										bind:value={cell.source}
+										disabled={running}
+										label="Code cell {i + 1}"
 										onchange={persistNotebook}
-										aria-label="Code cell {i + 1}"
-										spellcheck="false"
-									></textarea>
+										onrun={() => runCell(cell.id)}
+									/>
 									{#if cellOutputs[cell.id]}
 										<pre
 											class="nb-output"
