@@ -36,6 +36,19 @@ Kernel state across reload uses **pickle checkpoints + execution journal** in In
 - **Do not launch subagents** (no `Task` tool / `computerUse`, `explore`, `debug`, etc.). Do all work in the main agent session.
 - **Verify in chat:** use the terminal only (`npm run check`, `npm test`, `npm run build`, `curl` against the dev URL). Do not use browser automation or computer-use for testing unless the user explicitly asks.
 - **Minimize external API usage:** avoid GitHub REST/GraphQL and other MCP calls when git/CLI in the shell is enough (e.g. prefer `git push` + user-opened PR links over creating PRs via API). Do not call `cursor-cloud` diagnostics unless the user asks.
+- **Pull request status (required when working on a feature branch or when the user mentions “PR” / “update pr”):** before wrapping up and after pushing, confirm GitHub state for the **current** PR — do not assume an old PR number still applies after merge.
+  1. **Git (local):** `git fetch origin main <branch>` then `git log --oneline origin/main..HEAD` (commits not on `main`) and `git status` (clean, pushed).
+  2. **GitHub (preferred if `gh` is authenticated):** `gh pr list --head "$(git branch --show-current)"` and `gh pr view <number> --json state,mergeable,statusCheckRollup,url,mergedAt`.
+  3. **GitHub (no `gh`):** public API or compare URL — e.g. open PRs for head branch: `https://api.github.com/repos/manishsharma004/inbrowser-python-notebooks/pulls?state=open&head=manishsharma004:<branch>`; compare: `https://github.com/manishsharma004/inbrowser-python-notebooks/compare/main...<branch>`.
+  4. **Report in the agent reply:** PR `#`, **open / merged / closed**, link, whether head is pushed, CI/check summary if available, and commits ahead of `main`. If the previous PR was **merged** and the branch still has new commits, say clearly that a **new PR** is needed (link the compare URL); do not tell the user “PR updated” when there is no open PR.
+
+### Pull requests (this repo)
+
+| Item | Value |
+|------|--------|
+| Default feature branch | `cursor-agent/monaco-editor-intellisense-9cc7` |
+| Compare (branch vs `main`) | https://github.com/manishsharma004/inbrowser-python-notebooks/compare/main...cursor-agent/monaco-editor-intellisense-9cc7 |
+| Note | **#3** (`feat: Monaco Python editor…`) was **merged** into `main` at `e9ebb02`. Further work on the same branch name needs a **new** open PR. |
 
 ### UI / manual checks
 
