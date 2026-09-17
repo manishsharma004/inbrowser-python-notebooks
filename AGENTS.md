@@ -48,7 +48,7 @@ Kernel state across reload uses **pickle checkpoints + execution journal** in In
 |------|--------|
 | Default feature branch | `cursor-agent/monaco-editor-intellisense-9cc7` |
 | Compare (branch vs `main`) | https://github.com/manishsharma004/inbrowser-python-notebooks/compare/main...cursor-agent/monaco-editor-intellisense-9cc7 |
-| Note | **#3** (`feat: Monaco Python editor…`) was **merged** into `main` at `e9ebb02`. Further work on the same branch name needs a **new** open PR. |
+| Note | **#3** was merged at `e9ebb02`. Follow-up work: **#4** ← `cursor-agent/monaco-editor-intellisense-9cc7` vs `main`. |
 
 ### UI / manual checks
 
