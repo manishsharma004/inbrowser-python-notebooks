@@ -452,6 +452,26 @@ body.nb-resize-active {
 	color: color-mix(in srgb, var(--err) 75%, var(--ink));
 }
 
+.nb-figure-output {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin: 0.45rem 0 0;
+	padding: 0.55rem 0.65rem;
+	border-left: 3px solid var(--run);
+	background: color-mix(in srgb, var(--bg) 55%, var(--cell-bg));
+}
+
+.nb-figure-output img {
+	display: block;
+	width: 100%;
+	max-width: 42rem;
+	height: auto;
+	border: 1px solid var(--border-strong);
+	border-radius: 2px;
+	background: #fff;
+}
+
 .nb-run-meta {
 	display: flex;
 	flex-wrap: wrap;

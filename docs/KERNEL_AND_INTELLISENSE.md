@@ -76,16 +76,7 @@ When enabled, each Monaco code cell attaches Pyright diagnostics (types, imports
 
 ## 3. Preloaded scientific stack
 
-Each kernel startup loads Pyodide wheels for **`numpy`**, **`matplotlib-pyodide`**, and **`matplotlib`** (via `loadPackage` from the Pyodide CDN). First run after a cold kernel may take longer while wheels download.
-
-```python
-import numpy as np
-import matplotlib.pyplot as plt
-
-x = np.linspace(0, 2 * np.pi, 100)
-plt.plot(x, np.sin(x))
-plt.show()  # renders with the Pyodide HTML canvas backend
-```
+Each kernel startup loads Pyodide wheels for **`numpy`** and **`matplotlib`**. `plt.show()` renders **inline PNGs** under the cell (Agg backend), not floating browser windows.
 
 Additional pure-Python packages can still be installed with **`micropip.install(...)`** when available for Pyodide.
 
