@@ -20,6 +20,8 @@
 	--font-ui: 'IBM Plex Sans', 'Segoe UI', sans-serif;
 	--font-mono: 'IBM Plex Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
 	--rail-width: 15.5rem;
+	--session-width: 19rem;
+	--pane-splitter-size: 5px;
 	--cell-gutter: 2.75rem;
 }
 
@@ -175,16 +177,54 @@ button:disabled {
 
 .nb-body {
 	display: grid;
-	grid-template-columns: var(--rail-width) minmax(0, 1fr) min(19rem, 32vw);
+	grid-template-columns:
+		var(--rail-width)
+		var(--pane-splitter-size)
+		minmax(0, 1fr)
+		var(--pane-splitter-size)
+		var(--session-width);
 	flex: 1;
 	min-height: 0;
 	background: var(--bg-elevated);
 }
 
+.nb-pane-splitter {
+	position: relative;
+	cursor: col-resize;
+	touch-action: none;
+	background: transparent;
+	min-width: var(--pane-splitter-size);
+	margin: 0 -1px;
+	z-index: 3;
+	border: none;
+	padding: 0;
+	height: auto;
+	align-self: stretch;
+}
+
+.nb-pane-splitter::after {
+	content: '';
+	position: absolute;
+	inset: 0 -3px;
+}
+
+.nb-pane-splitter:hover,
+.nb-pane-splitter:focus-visible,
+.nb-pane-splitter.nb-pane-splitter--active {
+	background: color-mix(in srgb, var(--run) 28%, transparent);
+	outline: none;
+}
+
+body.nb-resize-active {
+	cursor: col-resize !important;
+	user-select: none;
+}
+
 @media (max-width: 960px) {
 	.nb-body {
-		grid-template-columns: var(--rail-width) minmax(0, 1fr);
+		grid-template-columns: var(--rail-width) var(--pane-splitter-size) minmax(0, 1fr);
 	}
+	.nb-pane-splitter--session,
 	.nb-session {
 		display: none;
 	}
@@ -193,6 +233,9 @@ button:disabled {
 @media (max-width: 720px) {
 	.nb-body {
 		grid-template-columns: 1fr;
+	}
+	.nb-pane-splitter {
+		display: none;
 	}
 	.nb-rail {
 		border-bottom: 1px solid var(--border);
