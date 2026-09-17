@@ -40,6 +40,15 @@
 	import SessionPanel from '$lib/components/SessionPanel.svelte';
 	import { formatDuration, formatRunSummary, formatRunTimestamp } from '$lib/notebook/formatRunMeta.js';
 	import { randomId } from '$lib/utils/randomId.js';
+	import {
+		clampPanelWidth,
+		loadPanelLayout,
+		RAIL_WIDTH_MAX,
+		RAIL_WIDTH_MIN,
+		savePanelLayout,
+		SESSION_WIDTH_MAX,
+		SESSION_WIDTH_MIN
+	} from '$lib/layout/panelLayout.js';
 
 	/**
 	 * @typedef {Object} CellRunRecord
@@ -71,6 +80,47 @@
 	let lastRestoreNote = $state(/** @type {string | null} */ (null));
 	/** @type {HTMLInputElement | null} */
 	let importInput = $state(null);
+	let railWidth = $state(248);
+	let sessionWidth = $state(304);
+
+	/** @param {'rail' | 'session'} pane @param {PointerEvent} event */
+	function startPaneResize(pane, event) {
+		if (event.button !== 0) return;
+		event.preventDefault();
+		const handle = /** @type {HTMLElement} */ (event.currentTarget);
+		handle.setPointerCapture(event.pointerId);
+		handle.classList.add('nb-pane-splitter--active');
+		document.body.classList.add('nb-resize-active');
+
+		const startX = event.clientX;
+		const startRail = railWidth;
+		const startSession = sessionWidth;
+
+		/** @param {PointerEvent} moveEvent */
+		const onMove = (moveEvent) => {
+			const dx = moveEvent.clientX - startX;
+			if (pane === 'rail') {
+				railWidth = clampPanelWidth(startRail + dx, RAIL_WIDTH_MIN, RAIL_WIDTH_MAX);
+			} else {
+				sessionWidth = clampPanelWidth(startSession + dx, SESSION_WIDTH_MIN, SESSION_WIDTH_MAX);
+			}
+		};
+
+		/** @param {PointerEvent} endEvent */
+		const onEnd = (endEvent) => {
+			handle.releasePointerCapture(endEvent.pointerId);
+			handle.classList.remove('nb-pane-splitter--active');
+			document.body.classList.remove('nb-resize-active');
+			handle.removeEventListener('pointermove', onMove);
+			handle.removeEventListener('pointerup', onEnd);
+			handle.removeEventListener('pointercancel', onEnd);
+			savePanelLayout(railWidth, sessionWidth);
+		};
+
+		handle.addEventListener('pointermove', onMove);
+		handle.addEventListener('pointerup', onEnd);
+		handle.addEventListener('pointercancel', onEnd);
+	}
 
 	async function reloadKernelSessionMeta() {
 		kernelSession = await loadKernelSession();
@@ -83,6 +133,9 @@
 	}
 
 	onMount(async () => {
+		const layout = loadPanelLayout();
+		railWidth = layout.rail;
+		sessionWidth = layout.session;
 		const loaded = await loadSnapshot();
 		const starter = ensureStarterNotebook(loaded);
 		await saveSnapshot(loaded);
@@ -421,7 +474,10 @@
 			</div>
 		</header>
 
-		<div class="nb-body">
+		<div
+			class="nb-body"
+			style="--rail-width: {railWidth}px; --session-width: {sessionWidth}px"
+		>
 			<aside class="nb-rail" aria-label="Workspace files">
 				<div class="nb-rail__head">
 					<p class="nb-rail__label">local store</p>
@@ -444,6 +500,13 @@
 					<button type="button" class="nb-new-btn" onclick={addNotebook}>+ new notebook</button>
 				</div>
 			</aside>
+
+			<button
+				type="button"
+				class="nb-pane-splitter"
+				aria-label="Resize file sidebar"
+				onpointerdown={(event) => startPaneResize('rail', event)}
+			></button>
 
 			<div class="nb-canvas">
 				{#if showRestoreBanner && kernelSession}
@@ -561,6 +624,13 @@
 					{/each}
 				</div>
 			</div>
+
+			<button
+				type="button"
+				class="nb-pane-splitter nb-pane-splitter--session"
+				aria-label="Resize session panel"
+				onpointerdown={(event) => startPaneResize('session', event)}
+			></button>
 
 			<SessionPanel
 				globals={sessionGlobals}
