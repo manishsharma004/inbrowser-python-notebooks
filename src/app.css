@@ -1,0 +1,192 @@
+:root {
+	--bg: #1a1a24;
+	--surface: #232333;
+	--panel: #2b2c40;
+	--border: #3d3f5c;
+	--text: #e7e9f0;
+	--muted: #9aa0b8;
+	--accent: #696cff;
+	--accent-hover: #7b7dff;
+	--success: #71dd37;
+	--danger: #ff3e1d;
+	--radius: 10px;
+	--font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	min-height: 100%;
+	background: var(--bg);
+	color: var(--text);
+	font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+	line-height: 1.5;
+}
+
+a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+a:hover {
+	color: var(--accent-hover);
+}
+
+button {
+	font: inherit;
+	cursor: pointer;
+}
+
+.panel {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+.eyebrow {
+	font-size: 0.75rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted);
+	margin: 0 0 0.35rem;
+}
+
+.pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.35rem 0.75rem;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: var(--surface);
+	color: var(--text);
+	font-size: 0.875rem;
+}
+
+.pill--accent {
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+
+.action-link {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+	padding: 0.5rem 1rem;
+	border-radius: var(--radius);
+	border: none;
+	background: var(--accent);
+	color: #fff;
+	font-weight: 600;
+}
+
+.action-link:hover {
+	background: var(--accent-hover);
+	color: #fff;
+}
+
+.action-link:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.muted {
+	color: var(--muted);
+}
+
+.app-shell {
+	display: grid;
+	grid-template-columns: minmax(200px, 260px) 1fr;
+	min-height: 100vh;
+}
+
+@media (max-width: 768px) {
+	.app-shell {
+		grid-template-columns: 1fr;
+	}
+}
+
+.sidebar {
+	padding: 1rem;
+	border-right: 1px solid var(--border);
+	background: var(--surface);
+}
+
+.main {
+	padding: 1rem 1.25rem 2rem;
+	max-width: 960px;
+}
+
+.file-tree {
+	list-style: none;
+	margin: 0.75rem 0 0;
+	padding: 0;
+}
+
+.file-tree li {
+	margin: 0.15rem 0;
+}
+
+.file-tree button {
+	width: 100%;
+	text-align: left;
+	padding: 0.4rem 0.5rem;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--text);
+}
+
+.file-tree button:hover,
+.file-tree button[aria-current='page'] {
+	background: var(--panel);
+}
+
+.cell {
+	margin-top: 1rem;
+}
+
+.cell textarea {
+	width: 100%;
+	min-height: 140px;
+	padding: 0.75rem;
+	border-radius: var(--radius);
+	border: 1px solid var(--border);
+	background: #15151f;
+	color: var(--text);
+	font-family: var(--font-mono);
+	font-size: 0.875rem;
+	resize: vertical;
+}
+
+.output {
+	margin-top: 0.5rem;
+	padding: 0.75rem;
+	border-radius: var(--radius);
+	border: 1px solid var(--border);
+	background: #15151f;
+	font-family: var(--font-mono);
+	font-size: 0.8125rem;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.output--error {
+	border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
+	color: #ffb4a8;
+}
+
+.toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+	margin-top: 0.75rem;
+}
