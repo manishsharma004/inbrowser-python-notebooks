@@ -72,21 +72,30 @@ function runTransaction(mode, handler) {
 
 /**
  * @param {string} [workspaceId]
+ * @returns {Promise<boolean>}
+ */
+export async function hasPersistedWorkspace(workspaceId = DEFAULT_WORKSPACE_ID) {
+	try {
+		const stored = await runTransaction('readonly', (store) => store.get(workspaceId));
+		return stored != null && typeof stored === 'object';
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * @param {string} [workspaceId]
  * @returns {Promise<import('./types.js').VfsSnapshot>}
  */
 export async function loadSnapshot(workspaceId = DEFAULT_WORKSPACE_ID) {
-	try {
-		const stored = await runTransaction('readonly', (store) => store.get(workspaceId));
-		if (!stored || typeof stored !== 'object' || !Array.isArray(stored.nodes)) {
-			return emptySnapshot();
-		}
-		return {
-			rootId: typeof stored.rootId === 'string' ? stored.rootId : emptySnapshot().rootId,
-			nodes: stored.nodes
-		};
-	} catch {
+	const stored = await runTransaction('readonly', (store) => store.get(workspaceId));
+	if (!stored || typeof stored !== 'object' || !Array.isArray(stored.nodes)) {
 		return emptySnapshot();
 	}
+	return {
+		rootId: typeof stored.rootId === 'string' ? stored.rootId : emptySnapshot().rootId,
+		nodes: stored.nodes
+	};
 }
 
 /**

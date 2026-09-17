@@ -85,14 +85,19 @@ export function writeFile(snapshot, nodeId, content) {
 
 /**
  * @param {import('./types.js').VfsSnapshot} snapshot
+ * @returns {import('./types.js').VfsNode | null}
  */
 export function ensureStarterNotebook(snapshot) {
 	const children = listChildren(snapshot, snapshot.rootId);
-	const hasNotebook = children.some(
+	const notebooks = children.filter(
 		(node) => node.type === 'file' && node.name.endsWith('.ipynb.json')
 	);
-	if (hasNotebook) {
-		return children.find((node) => node.type === 'file') ?? null;
+	if (notebooks.length > 0) {
+		return (
+			[...notebooks].sort(
+				(a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0) || a.name.localeCompare(b.name)
+			)[0] ?? null
+		);
 	}
 
 	return createNode(

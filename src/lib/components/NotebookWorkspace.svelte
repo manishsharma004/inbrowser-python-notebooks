@@ -3,11 +3,13 @@
 	import {
 		createNode,
 		ensureStarterNotebook,
+		hasPersistedWorkspace,
 		listChildren,
 		loadSnapshot,
 		saveSnapshot,
 		writeFile
 	} from '$lib/vfs/indexedDbVfs.js';
+	import { emptySnapshot } from '$lib/vfs/vfsTree.js';
 	import { parseNotebook, serializeNotebook } from '$lib/notebook/parseNotebook.js';
 	import {
 		downloadTextFile,
@@ -85,6 +87,14 @@
 	let railWidth = $state(248);
 	let sessionWidth = $state(304);
 	let importSessionSourceId = $state('');
+	let workspaceLoadError = $state(/** @type {string | null} */ (null));
+
+	const LAST_OPEN_FILE_KEY = 'nb-last-open-file-v1';
+
+	/** @param {import('$lib/vfs/types.js').VfsSnapshot} snap */
+	function bumpSnapshot(snap) {
+		return { ...snap, nodes: [...snap.nodes] };
+	}
 
 	async function reloadKernelSessionMeta(fileId = activeFileId) {
 		if (!fileId) {
@@ -155,6 +165,9 @@
 			notebook = parseNotebook(rawContent);
 			cellOutputs = {};
 			importSessionSourceId = '';
+			if (typeof localStorage !== 'undefined') {
+				localStorage.setItem(LAST_OPEN_FILE_KEY, fileId);
+			}
 			await switchKernelToFile(fileId);
 		} else {
 			notebook = parseNotebook(rawContent);
@@ -207,12 +220,38 @@
 		const layout = loadPanelLayout();
 		railWidth = layout.rail;
 		sessionWidth = layout.session;
-		const loaded = await loadSnapshot();
-		const starter = ensureStarterNotebook(loaded);
-		await saveSnapshot(loaded);
-		snapshot = loaded;
-		if (starter) {
-			await selectFile(starter.id, starter.content ?? '');
+		try {
+			const hadPersisted = await hasPersistedWorkspace();
+			const loaded = await loadSnapshot();
+			const nodeCountBefore = loaded.nodes.length;
+			const starter = ensureStarterNotebook(loaded);
+			const createdStarter = loaded.nodes.length > nodeCountBefore;
+			if (createdStarter || !hadPersisted) {
+				await saveSnapshot(loaded);
+			}
+			snapshot = bumpSnapshot(loaded);
+
+			const notebooks = listChildren(loaded, loaded.rootId).filter(
+				(n) => n.type === 'file' && n.name.endsWith('.ipynb.json')
+			);
+			const lastOpenId =
+				typeof localStorage !== 'undefined'
+					? localStorage.getItem(LAST_OPEN_FILE_KEY)
+					: null;
+			const preferred =
+				notebooks.find((n) => n.id === lastOpenId) ?? starter ?? notebooks[0] ?? null;
+			if (preferred) {
+				await selectFile(preferred.id, preferred.content ?? '');
+			}
+		} catch (error) {
+			workspaceLoadError =
+				error instanceof Error ? error.message : 'Could not load workspace from IndexedDB.';
+			const empty = emptySnapshot();
+			snapshot = bumpSnapshot(empty);
+			const starter = ensureStarterNotebook(empty);
+			if (starter) {
+				await selectFile(starter.id, starter.content ?? '');
+			}
 		}
 	});
 
@@ -220,6 +259,13 @@
 		if (!snapshot || !activeFileId || !notebook) return;
 		writeFile(snapshot, activeFileId, serializeNotebook(notebook));
 		await saveSnapshot(snapshot);
+		snapshot = bumpSnapshot(snapshot);
+	}
+
+	async function persistWorkspaceTree() {
+		if (!snapshot) return;
+		await saveSnapshot(snapshot);
+		snapshot = bumpSnapshot(snapshot);
 	}
 
 	async function refreshCompletionIndex() {
@@ -468,7 +514,7 @@
 				]
 			})
 		);
-		await saveSnapshot(snapshot);
+		await persistWorkspaceTree();
 		await selectFile(file.id, file.content ?? '');
 	}
 
@@ -498,7 +544,7 @@
 			'file',
 			serializeNotebook(imported)
 		);
-		await saveSnapshot(snapshot);
+		await persistWorkspaceTree();
 		await selectFile(node.id, node.content ?? '');
 	}
 
@@ -569,6 +615,13 @@
 				<span>{kernelLabel}</span>
 			</div>
 		</header>
+
+		{#if workspaceLoadError}
+			<div class="nb-restore-banner" role="alert">
+				<strong>Workspace storage error</strong>
+				<span>{workspaceLoadError} Imported notebooks use IndexedDB on this origin only.</span>
+			</div>
+		{/if}
 
 		<div
 			class="nb-body"

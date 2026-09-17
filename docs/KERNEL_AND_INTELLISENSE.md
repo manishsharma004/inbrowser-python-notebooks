@@ -76,7 +76,7 @@ When enabled, each Monaco code cell attaches Pyright diagnostics (types, imports
 
 ## 3. Preloaded scientific stack
 
-Each kernel startup loads Pyodide wheels for **`numpy`** and **`matplotlib`** (via `loadPackage` from the Pyodide CDN). First run after a cold kernel may take longer while wheels download.
+Each kernel startup loads Pyodide wheels for **`numpy`**, **`matplotlib-pyodide`**, and **`matplotlib`** (via `loadPackage` from the Pyodide CDN). First run after a cold kernel may take longer while wheels download.
 
 ```python
 import numpy as np
