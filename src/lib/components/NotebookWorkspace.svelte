@@ -62,6 +62,7 @@
 	 * @property {number} finishedAt
 	 * @property {number} durationMs
 	 * @property {number} executionCount
+	 * @property {string[]} [figures]
 	 */
 
 	/** @type {import('$lib/vfs/types.js').VfsSnapshot | null} */
@@ -435,12 +436,16 @@
 		if (result.error) chunks.push(result.error);
 
 		const previousCount = cellOutputs[cellId]?.executionCount ?? 0;
+		const textOutput =
+			chunks.join('\n') ||
+			(result.ok && (result.figures?.length ?? 0) > 0 ? '' : result.ok ? '—' : 'Execution failed.');
 
 		cellOutputs = {
 			...cellOutputs,
 			[cellId]: {
 				ok: result.ok,
-				text: chunks.join('\n') || (result.ok ? '—' : 'Execution failed.'),
+				text: textOutput,
+				figures: result.figures ?? [],
 				startedAt,
 				finishedAt,
 				durationMs,
@@ -762,10 +767,23 @@
 											</span>
 											<span class="nb-run-meta__duration">{formatDuration(cellOutputs[cell.id].durationMs)}</span>
 										</div>
-										<pre
-											class="nb-output"
-											class:nb-output--err={!cellOutputs[cell.id].ok}
-										>{cellOutputs[cell.id].text}</pre>
+										{#if cellOutputs[cell.id].figures?.length}
+											<div class="nb-figure-output" aria-label="Figure output">
+												{#each cellOutputs[cell.id].figures as figure, fi (fi)}
+													<img
+														src="data:image/png;base64,{figure}"
+														alt="Matplotlib figure {fi + 1}"
+														loading="lazy"
+													/>
+												{/each}
+											</div>
+										{/if}
+										{#if cellOutputs[cell.id].text}
+											<pre
+												class="nb-output"
+												class:nb-output--err={!cellOutputs[cell.id].ok}
+											>{cellOutputs[cell.id].text}</pre>
+										{/if}
 									{/if}
 								{/if}
 							</div>

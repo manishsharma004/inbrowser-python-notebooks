@@ -1,4 +1,7 @@
-import { loadNotebookPackages } from './notebookPackages.js';
+import {
+	cleanupStrayMatplotlibWidgets,
+	loadNotebookPackages
+} from './notebookPackages.js';
 
 const PYODIDE_VERSION = '0.29.4';
 const PYODIDE_INDEX_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
@@ -97,7 +100,8 @@ _NB_SKIP_GLOBALS = set(dir(builtins)) | {
     "builtins", "json", "os", "pickle", "base64", "_NB_SKIP_GLOBALS",
     "nb_list_user_globals", "nb_list_environ", "nb_completion_snapshot",
     "nb_export_pickle_checkpoint", "nb_import_pickle_checkpoint",
-    "nb_merge_pickle_checkpoint"
+    "nb_merge_pickle_checkpoint", "nb_drain_figure_pngs", "nb_hook_matplotlib_show",
+    "_NB_FIGURE_PNGS", "plt"
 }
 
 def nb_list_user_globals():
@@ -216,6 +220,7 @@ def nb_merge_pickle_checkpoint(b64_text, overwrite_names="0"):
  * Drop the cached interpreter (next run loads a fresh kernel).
  */
 export function resetPythonRuntime() {
+	cleanupStrayMatplotlibWidgets();
 	runtimePromise = null;
 	sessionHelpersPromise = null;
 	notebookPackagesPromise = null;
@@ -227,7 +232,29 @@ export function resetPythonRuntime() {
  * @property {string} stdout
  * @property {string} stderr
  * @property {string} [error]
+ * @property {string[]} [figures] base64 PNG payloads from plt.show()
  */
+
+/**
+ * @param {any} pyodide
+ * @returns {string[]}
+ */
+function drainFigurePngs(pyodide) {
+	try {
+		pyodide.runPython(`
+import matplotlib.pyplot as plt
+if plt.get_fignums():
+    plt.show()
+`);
+		const jsonText = /** @type {string} */ (pyodide.runPython('nb_drain_figure_pngs()'));
+		const parsed = /** @type {unknown} */ (JSON.parse(jsonText));
+		return Array.isArray(parsed)
+			? parsed.filter((item) => typeof item === 'string' && item.length > 0)
+			: [];
+	} catch {
+		return [];
+	}
+}
 
 /**
  * Execute Python source in the shared Pyodide runtime (globals persist between calls).
@@ -245,18 +272,25 @@ export async function runPythonSource(source) {
 	pyodide.setStderr({ batched: (value) => stderr.push(value) });
 
 	try {
+		pyodide.runPython('nb_drain_figure_pngs()');
 		await pyodide.runPythonAsync(source);
+		const figures = drainFigurePngs(pyodide);
+		cleanupStrayMatplotlibWidgets();
 		return {
 			ok: true,
 			stdout: stdout.join('\n').trim(),
-			stderr: stderr.join('\n').trim()
+			stderr: stderr.join('\n').trim(),
+			figures
 		};
 	} catch (error) {
+		const figures = drainFigurePngs(pyodide);
+		cleanupStrayMatplotlibWidgets();
 		return {
 			ok: false,
 			stdout: stdout.join('\n').trim(),
 			stderr: stderr.join('\n').trim(),
-			error: error instanceof Error ? error.message : 'Python execution failed.'
+			error: error instanceof Error ? error.message : 'Python execution failed.',
+			figures
 		};
 	}
 }
