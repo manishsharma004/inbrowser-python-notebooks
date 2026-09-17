@@ -16,6 +16,8 @@ npm run build
 
 Client-only Python notebooks: SvelteKit + Pyodide + IndexedDB virtual file system. Static export to `dist/` for GitHub Pages at base path `/inbrowser-python-notebooks`.
 
+Notebook UI includes Monaco code cells, markdown edit/preview, cell add/delete/reorder, import/export (`.ipynb` + `.ipynb.json`), and a session panel for interpreter variables and `os.environ`.
+
 ## Cursor Cloud specific instructions
 
 - **Dev server:** `npm run dev` (listens on `0.0.0.0:4174` per `package.json`)

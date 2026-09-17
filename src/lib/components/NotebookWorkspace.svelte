@@ -9,8 +9,20 @@
 		writeFile
 	} from '$lib/vfs/indexedDbVfs.js';
 	import { parseNotebook, serializeNotebook } from '$lib/notebook/parseNotebook.js';
-	import { runPythonSource } from '$lib/pyodide/runtime.js';
+	import {
+		downloadTextFile,
+		parseImportedNotebook,
+		toJupyterNotebook
+	} from '$lib/notebook/jupyterFormat.js';
+	import {
+		inspectPythonSession,
+		isPythonRuntimeReady,
+		resetPythonRuntime,
+		runPythonSource
+	} from '$lib/pyodide/runtime.js';
 	import MonacoCodeCell from '$lib/components/MonacoCodeCell.svelte';
+	import MarkdownCell from '$lib/components/MarkdownCell.svelte';
+	import SessionPanel from '$lib/components/SessionPanel.svelte';
 
 	/** @type {import('$lib/vfs/types.js').VfsSnapshot | null} */
 	let snapshot = $state(null);
@@ -21,6 +33,13 @@
 	let pyodideStatus = $state('idle');
 	/** @type {Record<string, { ok: boolean, text: string }>} */
 	let cellOutputs = $state({});
+	/** @type {Record<string, string>} */
+	let sessionGlobals = $state({});
+	/** @type {Record<string, string>} */
+	let sessionEnviron = $state({});
+	let sessionLoading = $state(false);
+	/** @type {HTMLInputElement | null} */
+	let importInput = $state(null);
 
 	onMount(async () => {
 		const loaded = await loadSnapshot();
@@ -42,6 +61,34 @@
 		if (!snapshot || !activeFileId || !notebook) return;
 		writeFile(snapshot, activeFileId, serializeNotebook(notebook));
 		await saveSnapshot(snapshot);
+	}
+
+	async function refreshSessionInspector() {
+		if (typeof window === 'undefined') return;
+		if (!isPythonRuntimeReady()) {
+			sessionGlobals = {};
+			sessionEnviron = {};
+			return;
+		}
+		sessionLoading = true;
+		try {
+			const snap = await inspectPythonSession();
+			sessionGlobals = snap.globals;
+			sessionEnviron = snap.environ;
+		} catch {
+			sessionGlobals = {};
+			sessionEnviron = {};
+		} finally {
+			sessionLoading = false;
+		}
+	}
+
+	async function restartKernel() {
+		resetPythonRuntime();
+		pyodideStatus = 'idle';
+		cellOutputs = {};
+		sessionGlobals = {};
+		sessionEnviron = {};
 	}
 
 	async function runCell(cellId) {
@@ -66,6 +113,50 @@
 				text: chunks.join('\n') || (result.ok ? '—' : 'Execution failed.')
 			}
 		};
+
+		await refreshSessionInspector();
+	}
+
+	/**
+	 * @param {'code' | 'markdown'} kind
+	 * @param {number} [afterIndex]
+	 */
+	async function addCell(kind, afterIndex = notebook ? notebook.cells.length - 1 : 0) {
+		if (!notebook) return;
+		const cell = {
+			id: crypto.randomUUID(),
+			kind,
+			source: kind === 'markdown' ? '## Notes\n\n' : ''
+		};
+		const insertAt = Math.min(Math.max(afterIndex, -1) + 1, notebook.cells.length);
+		notebook.cells.splice(insertAt, 0, cell);
+		notebook = { ...notebook, cells: [...notebook.cells] };
+		await persistNotebook();
+	}
+
+	/** @param {number} index */
+	async function deleteCell(index) {
+		if (!notebook || notebook.cells.length <= 1) return;
+		const removed = notebook.cells[index];
+		notebook.cells.splice(index, 1);
+		notebook = { ...notebook, cells: [...notebook.cells] };
+		if (removed?.id && cellOutputs[removed.id]) {
+			const { [removed.id]: _, ...rest } = cellOutputs;
+			cellOutputs = rest;
+		}
+		await persistNotebook();
+	}
+
+	/** @param {number} index @param {-1 | 1} direction */
+	async function moveCell(index, direction) {
+		if (!notebook) return;
+		const target = index + direction;
+		if (target < 0 || target >= notebook.cells.length) return;
+		const cells = [...notebook.cells];
+		const [item] = cells.splice(index, 1);
+		cells.splice(target, 0, item);
+		notebook = { ...notebook, cells };
+		await persistNotebook();
 	}
 
 	async function addNotebook() {
@@ -77,11 +168,57 @@
 			'file',
 			serializeNotebook({
 				version: 1,
-				cells: [{ id: crypto.randomUUID(), kind: 'code', source: '' }]
+				cells: [
+					{ id: crypto.randomUUID(), kind: 'markdown', source: '# New notebook\n\n' },
+					{ id: crypto.randomUUID(), kind: 'code', source: 'print("Hello from Pyodide")\n' }
+				]
 			})
 		);
 		await saveSnapshot(snapshot);
 		selectFile(file.id, file.content ?? '');
+	}
+
+	function triggerImport() {
+		importInput?.click();
+	}
+
+	/** @param {Event} event */
+	async function handleImportFile(event) {
+		const input = /** @type {HTMLInputElement} */ (event.currentTarget);
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file || !snapshot) return;
+
+		const raw = await file.text();
+		const imported = parseImportedNotebook(raw);
+		if (!imported || imported.cells.length === 0) {
+			window.alert('Could not import notebook — expected .ipynb or .ipynb.json format.');
+			return;
+		}
+
+		const safeName = file.name.replace(/[^\w.\-]+/g, '-').replace(/-+/g, '-');
+		const node = createNode(
+			snapshot,
+			snapshot.rootId,
+			safeName.endsWith('.json') ? safeName : `${safeName}.ipynb.json`,
+			'file',
+			serializeNotebook(imported)
+		);
+		await saveSnapshot(snapshot);
+		selectFile(node.id, node.content ?? '');
+	}
+
+	function exportNotebookJson() {
+		if (!notebook) return;
+		const base = activeName.replace(/\.ipynb\.json$/i, '');
+		downloadTextFile(`${base}.ipynb.json`, serializeNotebook(notebook));
+	}
+
+	function exportNotebookJupyter() {
+		if (!notebook) return;
+		const base = activeName.replace(/\.ipynb\.json$/i, '').replace(/\.ipynb$/i, '');
+		const jupyter = toJupyterNotebook(notebook);
+		downloadTextFile(`${base}.ipynb`, JSON.stringify(jupyter, null, 2));
 	}
 
 	const files = $derived.by(() => {
@@ -107,6 +244,14 @@
 	});
 </script>
 
+<input
+	bind:this={importInput}
+	type="file"
+	accept=".ipynb,.json,application/json"
+	class="nb-sr-only"
+	onchange={handleImportFile}
+/>
+
 {#if !snapshot || !notebook}
 	<p class="nb-loading">mounting workspace…</p>
 {:else}
@@ -115,6 +260,13 @@
 			<div class="nb-topbar__brand">
 				<span class="nb-topbar__title">{activeName}</span>
 				<span class="nb-topbar__path">~/workspace</span>
+			</div>
+			<div class="nb-topbar__actions">
+				<button type="button" class="nb-chip" onclick={() => addCell('code')}>+ Code</button>
+				<button type="button" class="nb-chip" onclick={() => addCell('markdown')}>+ Markdown</button>
+				<button type="button" class="nb-chip" onclick={triggerImport}>Import</button>
+				<button type="button" class="nb-chip" onclick={exportNotebookJson}>Export JSON</button>
+				<button type="button" class="nb-chip" onclick={exportNotebookJupyter}>Export .ipynb</button>
 			</div>
 			<div class="nb-kernel" title="Pyodide loads from CDN on first run">
 				<span class={kernelDotClass} aria-hidden="true"></span>
@@ -166,15 +318,33 @@
 								<span class="nb-cell__index">{i + 1}</span>
 							</div>
 							<div class="nb-cell__body">
+								<div class="nb-cell-toolbar">
+									<span class="nb-cell-toolbar__tag">{cell.kind}</span>
+									<div class="nb-cell-toolbar__actions">
+										<button type="button" class="nb-chip" onclick={() => addCell('code', i)}>+ code</button>
+										<button type="button" class="nb-chip" onclick={() => addCell('markdown', i)}>+ md</button>
+										<button type="button" class="nb-chip" onclick={() => moveCell(i, -1)} disabled={i === 0}>↑</button>
+										<button
+											type="button"
+											class="nb-chip"
+											onclick={() => moveCell(i, 1)}
+											disabled={i === notebook.cells.length - 1}>↓</button
+										>
+										<button
+											type="button"
+											class="nb-chip nb-chip--warn"
+											onclick={() => deleteCell(i)}
+											disabled={notebook.cells.length <= 1}>Delete</button
+										>
+									</div>
+								</div>
+
 								{#if cell.kind === 'markdown'}
-									<p class="nb-markdown-note">Markdown rendering not wired yet.</p>
-									<textarea
-										class="nb-editor"
+									<MarkdownCell
 										bind:value={cell.source}
+										label="Markdown cell {i + 1}"
 										onchange={persistNotebook}
-										aria-label="Markdown cell {i + 1}"
-										spellcheck="false"
-									></textarea>
+									/>
 								{:else}
 									<MonacoCodeCell
 										bind:value={cell.source}
@@ -195,6 +365,15 @@
 					{/each}
 				</div>
 			</div>
+
+			<SessionPanel
+				globals={sessionGlobals}
+				environ={sessionEnviron}
+				loading={sessionLoading || running}
+				kernelReady={pyodideStatus === 'ready'}
+				onrefresh={refreshSessionInspector}
+				onrestart={restartKernel}
+			/>
 		</div>
 
 		<footer class="nb-statusbar">

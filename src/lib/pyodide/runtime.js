@@ -4,6 +4,9 @@ const PYODIDE_INDEX_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/
 /** @type {Promise<any> | null} */
 let runtimePromise = null;
 
+/** @type {Promise<void> | null} */
+let sessionHelpersPromise = null;
+
 function appendPyodideScript() {
 	if (typeof window === 'undefined') {
 		throw new Error('Pyodide can only load in a browser environment.');
@@ -45,13 +48,61 @@ export async function ensurePythonRuntime() {
 			if (!loadPyodide) {
 				throw new Error('Pyodide loader did not initialize.');
 			}
-			return loadPyodide({ indexURL: PYODIDE_INDEX_URL });
+			const pyodide = await loadPyodide({ indexURL: PYODIDE_INDEX_URL });
+			await installSessionHelpers(pyodide);
+			return pyodide;
 		})().catch((error) => {
 			runtimePromise = null;
+			sessionHelpersPromise = null;
 			throw error;
 		});
 	}
 	return runtimePromise;
+}
+
+/**
+ * @param {any} pyodide
+ */
+async function installSessionHelpers(pyodide) {
+	if (sessionHelpersPromise) return sessionHelpersPromise;
+
+	sessionHelpersPromise = pyodide.runPythonAsync(`
+import builtins
+import json
+import os
+
+_NB_SKIP_GLOBALS = set(dir(builtins)) | {
+    "builtins", "json", "os", "_NB_SKIP_GLOBALS",
+    "nb_list_user_globals", "nb_list_environ"
+}
+
+def nb_list_user_globals():
+    out = {}
+    for name, value in globals().items():
+        if name.startswith("_") or name in _NB_SKIP_GLOBALS:
+            continue
+        try:
+            text = repr(value)
+        except Exception as exc:
+            text = f"<{type(value).__name__}: {exc}>"
+        if len(text) > 240:
+            text = text[:237] + "..."
+        out[name] = text
+    return out
+
+def nb_list_environ():
+    return {str(k): str(v) for k, v in os.environ.items()}
+`);
+
+	return sessionHelpersPromise;
+}
+
+/**
+ * Drop the cached interpreter (next run loads a fresh kernel).
+ */
+export function resetPythonRuntime() {
+	runtimePromise = null;
+	sessionHelpersPromise = null;
 }
 
 /**
@@ -63,7 +114,7 @@ export async function ensurePythonRuntime() {
  */
 
 /**
- * Execute Python source in the shared Pyodide runtime.
+ * Execute Python source in the shared Pyodide runtime (globals persist between calls).
  * @param {string} source
  * @returns {Promise<PythonRunResult>}
  */
@@ -92,4 +143,39 @@ export async function runPythonSource(source) {
 			error: error instanceof Error ? error.message : 'Python execution failed.'
 		};
 	}
+}
+
+/**
+ * @typedef {Object} PythonSessionSnapshot
+ * @property {Record<string, string>} globals
+ * @property {Record<string, string>} environ
+ */
+
+/**
+ * Inspect user-defined globals and process environment in the live kernel.
+ * @returns {Promise<PythonSessionSnapshot>}
+ */
+export async function inspectPythonSession() {
+	const pyodide = await ensurePythonRuntime();
+	await installSessionHelpers(pyodide);
+
+	const globalsProxy = pyodide.runPython('nb_list_user_globals()');
+	const environProxy = pyodide.runPython('nb_list_environ()');
+	const globals = /** @type {Record<string, string>} */ (
+		globalsProxy.toJs({ dict_converter: Object.fromEntries })
+	);
+	const environ = /** @type {Record<string, string>} */ (
+		environProxy.toJs({ dict_converter: Object.fromEntries })
+	);
+	globalsProxy.destroy();
+	environProxy.destroy();
+
+	return { globals, environ };
+}
+
+/**
+ * @returns {boolean}
+ */
+export function isPythonRuntimeReady() {
+	return runtimePromise !== null;
 }
