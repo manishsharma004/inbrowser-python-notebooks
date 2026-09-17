@@ -39,6 +39,7 @@
 	import MarkdownCell from '$lib/components/MarkdownCell.svelte';
 	import SessionPanel from '$lib/components/SessionPanel.svelte';
 	import { formatDuration, formatRunSummary, formatRunTimestamp } from '$lib/notebook/formatRunMeta.js';
+	import { randomId } from '$lib/utils/randomId.js';
 
 	/**
 	 * @typedef {Object} CellRunRecord
@@ -270,7 +271,7 @@
 	async function addCell(kind, afterIndex = notebook ? notebook.cells.length - 1 : 0) {
 		if (!notebook) return;
 		const cell = {
-			id: crypto.randomUUID(),
+			id: randomId(),
 			kind,
 			source: kind === 'markdown' ? '## Notes\n\n' : ''
 		};
@@ -315,8 +316,8 @@
 			serializeNotebook({
 				version: 1,
 				cells: [
-					{ id: crypto.randomUUID(), kind: 'markdown', source: '# New notebook\n\n' },
-					{ id: crypto.randomUUID(), kind: 'code', source: 'print("Hello from Pyodide")\n' }
+					{ id: randomId(), kind: 'markdown', source: '# New notebook\n\n' },
+					{ id: randomId(), kind: 'code', source: 'print("Hello from Pyodide")\n' }
 				]
 			})
 		);

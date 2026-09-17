@@ -2,6 +2,8 @@
  * @typedef {import('./parseNotebook.js').NotebookDocument} NotebookDocument
  */
 
+import { randomId } from '../utils/randomId.js';
+
 /**
  * @param {unknown} value
  * @returns {boolean}
@@ -28,7 +30,7 @@ function normalizeJupyterSource(source) {
  * @returns {NotebookDocument}
  */
 export function fromJupyterNotebook(raw, options = {}) {
-	const createId = options.createId ?? (() => crypto.randomUUID());
+	const createId = options.createId ?? (() => randomId());
 	/** @type {{ cell_type?: string; source?: string | string[] }[]} */
 	const cells = Array.isArray(raw.cells) ? raw.cells : [];
 
