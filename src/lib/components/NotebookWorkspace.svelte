@@ -15,16 +15,26 @@
 		toJupyterNotebook
 	} from '$lib/notebook/jupyterFormat.js';
 	import {
+		exportKernelCheckpoint,
+		importKernelCheckpoint,
 		inspectPythonCompletions,
 		inspectPythonSession,
 		isPythonRuntimeReady,
+		replayKernelJournal,
 		resetPythonRuntime,
 		runPythonSource
 	} from '$lib/pyodide/runtime.js';
 	import {
+		appendKernelJournalEntry,
+		clearKernelSession,
+		loadKernelSession,
+		saveKernelSession
+	} from '$lib/pyodide/kernelSessionStore.js';
+	import {
 		clearDynamicPythonCompletions,
 		setDynamicPythonCompletions
 	} from '$lib/editor/monacoCompletionState.js';
+	import { syncNotebookCellsForAnalysis } from '$lib/editor/pyrightBridge.js';
 	import MonacoCodeCell from '$lib/components/MonacoCodeCell.svelte';
 	import MarkdownCell from '$lib/components/MarkdownCell.svelte';
 	import SessionPanel from '$lib/components/SessionPanel.svelte';
@@ -54,14 +64,29 @@
 	/** @type {Record<string, string>} */
 	let sessionEnviron = $state({});
 	let sessionLoading = $state(false);
+	/** @type {import('$lib/pyodide/kernelSessionStore.js').KernelSessionRecord | null} */
+	let kernelSession = $state(null);
+	let showRestoreBanner = $state(false);
+	let lastRestoreNote = $state(/** @type {string | null} */ (null));
 	/** @type {HTMLInputElement | null} */
 	let importInput = $state(null);
+
+	async function reloadKernelSessionMeta() {
+		kernelSession = await loadKernelSession();
+		showRestoreBanner = Boolean(
+			kernelSession.pickleCheckpoint || kernelSession.journal.length > 0
+		);
+		if (kernelSession.lastRestoreNote && !lastRestoreNote) {
+			lastRestoreNote = kernelSession.lastRestoreNote;
+		}
+	}
 
 	onMount(async () => {
 		const loaded = await loadSnapshot();
 		const starter = ensureStarterNotebook(loaded);
 		await saveSnapshot(loaded);
 		snapshot = loaded;
+		await reloadKernelSessionMeta();
 		if (starter) {
 			selectFile(starter.id, starter.content ?? '');
 		}
@@ -71,6 +96,9 @@
 		activeFileId = fileId;
 		notebook = parseNotebook(rawContent);
 		cellOutputs = {};
+		if (notebook) {
+			syncNotebookCellsForAnalysis(fileId, notebook.cells);
+		}
 	}
 
 	async function persistNotebook() {
@@ -90,6 +118,76 @@
 		} catch {
 			clearDynamicPythonCompletions();
 		}
+	}
+
+	async function persistKernelCheckpoint() {
+		try {
+			const exported = await exportKernelCheckpoint();
+			if (!exported.checkpoint) return;
+			await saveKernelSession({
+				pickleCheckpoint: exported.checkpoint,
+				lastRestoreNote: `Checkpoint saved (${exported.variableCount} pickle-able names)`
+			});
+			lastRestoreNote = `Checkpoint saved (${exported.variableCount} pickle-able names)`;
+			await reloadKernelSessionMeta();
+		} catch {
+			/* kernel may not be ready yet */
+		}
+	}
+
+	async function saveCheckpointNow() {
+		sessionLoading = true;
+		await persistKernelCheckpoint();
+		sessionLoading = false;
+	}
+
+	async function restoreCheckpointNow() {
+		if (!kernelSession?.pickleCheckpoint) return;
+		sessionLoading = true;
+		running = true;
+		pyodideStatus = 'loading';
+		try {
+			const result = await importKernelCheckpoint(kernelSession.pickleCheckpoint);
+			const note = `Restored ${result.restored.length} name(s)${
+				result.failed.length ? `; ${result.failed.length} failed` : ''
+			}${result.error ? ` — ${result.error}` : ''}`;
+			lastRestoreNote = note;
+			await saveKernelSession({ lastRestoreNote: note });
+			pyodideStatus = 'ready';
+			showRestoreBanner = false;
+			await reloadKernelSessionMeta();
+			await refreshSessionInspector();
+		} finally {
+			running = false;
+			sessionLoading = false;
+		}
+	}
+
+	async function replayJournalNow() {
+		if (!kernelSession?.journal.length) return;
+		sessionLoading = true;
+		running = true;
+		pyodideStatus = 'loading';
+		try {
+			const stats = await replayKernelJournal(kernelSession.journal);
+			const note = `Replayed journal: ${stats.ok} ok, ${stats.failed} failed`;
+			lastRestoreNote = note;
+			await saveKernelSession({ lastRestoreNote: note });
+			pyodideStatus = 'ready';
+			showRestoreBanner = false;
+			await reloadKernelSessionMeta();
+			await refreshSessionInspector();
+		} finally {
+			running = false;
+			sessionLoading = false;
+		}
+	}
+
+	async function clearSavedSession() {
+		await clearKernelSession();
+		lastRestoreNote = 'Cleared saved kernel session';
+		showRestoreBanner = false;
+		await reloadKernelSessionMeta();
 	}
 
 	async function refreshSessionInspector() {
@@ -155,6 +253,12 @@
 				executionCount: previousCount + 1
 			}
 		};
+
+		if (result.ok) {
+			await appendKernelJournalEntry(cell.source, activeFileId);
+			await persistKernelCheckpoint();
+			await reloadKernelSessionMeta();
+		}
 
 		await refreshSessionInspector();
 	}
@@ -341,6 +445,39 @@
 			</aside>
 
 			<div class="nb-canvas">
+				{#if showRestoreBanner && kernelSession}
+					<div class="nb-restore-banner" role="status" aria-live="polite">
+						<strong>Saved kernel session</strong>
+						<span>
+							After reload, restore pickle-able globals or replay
+							{kernelSession.journal.length} journaled run(s).
+						</span>
+						<button
+							type="button"
+							class="nb-chip"
+							disabled={running || sessionLoading || !kernelSession.pickleCheckpoint}
+							onclick={() => restoreCheckpointNow()}
+						>
+							Restore checkpoint
+						</button>
+						<button
+							type="button"
+							class="nb-chip"
+							disabled={running || sessionLoading || kernelSession.journal.length === 0}
+							onclick={() => replayJournalNow()}
+						>
+							Replay journal
+						</button>
+						<button
+							type="button"
+							class="nb-chip"
+							disabled={running || sessionLoading}
+							onclick={() => (showRestoreBanner = false)}
+						>
+							Dismiss
+						</button>
+					</div>
+				{/if}
 				<div class="nb-canvas__inner">
 					{#each notebook.cells as cell, i (cell.id)}
 						<article class="nb-cell">
@@ -429,8 +566,15 @@
 				environ={sessionEnviron}
 				loading={sessionLoading || running}
 				kernelReady={pyodideStatus === 'ready'}
+				journalCount={kernelSession?.journal.length ?? 0}
+				hasCheckpoint={Boolean(kernelSession?.pickleCheckpoint)}
+				lastRestoreNote={lastRestoreNote}
 				onrefresh={refreshSessionInspector}
 				onrestart={restartKernel}
+				onsavecheckpoint={saveCheckpointNow}
+				onrestorecheckpoint={restoreCheckpointNow}
+				onreplayjournal={replayJournalNow}
+				onclearsession={clearSavedSession}
 			/>
 		</div>
 

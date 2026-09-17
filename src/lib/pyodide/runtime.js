@@ -72,8 +72,9 @@ import json
 import os
 
 _NB_SKIP_GLOBALS = set(dir(builtins)) | {
-    "builtins", "json", "os", "_NB_SKIP_GLOBALS",
-    "nb_list_user_globals", "nb_list_environ", "nb_completion_snapshot"
+    "builtins", "json", "os", "pickle", "base64", "_NB_SKIP_GLOBALS",
+    "nb_list_user_globals", "nb_list_environ", "nb_completion_snapshot",
+    "nb_export_pickle_checkpoint", "nb_import_pickle_checkpoint"
 }
 
 def nb_list_user_globals():
@@ -121,6 +122,40 @@ def nb_completion_snapshot():
             continue
 
     return json.dumps({"modules": modules, "members": members})
+
+def nb_export_pickle_checkpoint():
+    import pickle
+    import base64
+
+    payload = {}
+    for name, value in list(globals().items()):
+        if name.startswith("_") or name in _NB_SKIP_GLOBALS:
+            continue
+        try:
+            payload[name] = pickle.dumps(value)
+        except Exception:
+            continue
+    b64 = base64.b64encode(pickle.dumps(payload)).decode("ascii")
+    return json.dumps({"b64": b64, "count": len(payload)})
+
+def nb_import_pickle_checkpoint(b64_text):
+    import pickle
+    import base64
+
+    restored = []
+    failed = []
+    try:
+        payload = pickle.loads(base64.b64decode(b64_text))
+    except Exception as exc:
+        return json.dumps({"restored": restored, "failed": failed, "error": str(exc)})
+
+    for name, blob in payload.items():
+        try:
+            globals()[name] = pickle.loads(blob)
+            restored.append(name)
+        except Exception:
+            failed.append(name)
+    return json.dumps({"restored": restored, "failed": failed, "error": None})
 `);
 
 	return sessionHelpersPromise;
@@ -231,4 +266,70 @@ export async function inspectPythonCompletions() {
  */
 export function isPythonRuntimeReady() {
 	return runtimePromise !== null;
+}
+
+/**
+ * @typedef {Object} KernelCheckpointResult
+ * @property {string | null} checkpoint
+ * @property {number} variableCount
+ */
+
+/**
+ * Serialize pickle-able user globals to a base64 blob for IndexedDB.
+ * @returns {Promise<KernelCheckpointResult>}
+ */
+export async function exportKernelCheckpoint() {
+	const pyodide = await ensurePythonRuntime();
+	await installSessionHelpers(pyodide);
+	const jsonText = /** @type {string} */ (pyodide.runPython('nb_export_pickle_checkpoint()'));
+	const raw = /** @type {{ b64?: string; count?: number }} } */ (JSON.parse(jsonText));
+	return {
+		checkpoint: typeof raw.b64 === 'string' && raw.b64.length > 0 ? raw.b64 : null,
+		variableCount: typeof raw.count === 'number' ? raw.count : 0
+	};
+}
+
+/**
+ * @typedef {Object} KernelRestoreResult
+ * @property {string[]} restored
+ * @property {string[]} failed
+ * @property {string | null} error
+ */
+
+/**
+ * @param {string} checkpoint
+ * @returns {Promise<KernelRestoreResult>}
+ */
+export async function importKernelCheckpoint(checkpoint) {
+	const pyodide = await ensurePythonRuntime();
+	await installSessionHelpers(pyodide);
+	pyodide.globals.set('_nb_checkpoint_b64', checkpoint);
+	const jsonText = /** @type {string} */ (
+		pyodide.runPython('nb_import_pickle_checkpoint(_nb_checkpoint_b64)')
+	);
+	pyodide.runPython('del _nb_checkpoint_b64');
+	const raw = /** @type {{ restored?: string[]; failed?: string[]; error?: string | null }} } */ (
+		JSON.parse(jsonText)
+	);
+	return {
+		restored: Array.isArray(raw.restored) ? raw.restored : [],
+		failed: Array.isArray(raw.failed) ? raw.failed : [],
+		error: raw.error ?? null
+	};
+}
+
+/**
+ * Re-run stored cell sources in order (fallback when pickle restore is incomplete).
+ * @param {{ source: string }[]} journal
+ * @returns {Promise<{ ok: number; failed: number }>}
+ */
+export async function replayKernelJournal(journal) {
+	let ok = 0;
+	let failed = 0;
+	for (const entry of journal) {
+		const result = await runPythonSource(entry.source);
+		if (result.ok) ok += 1;
+		else failed += 1;
+	}
+	return { ok, failed };
 }

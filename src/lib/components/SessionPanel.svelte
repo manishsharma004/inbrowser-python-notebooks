@@ -5,8 +5,15 @@
 	 * @property {Record<string, string>} environ
 	 * @property {boolean} [loading]
 	 * @property {boolean} [kernelReady]
+	 * @property {number} [journalCount]
+	 * @property {boolean} [hasCheckpoint]
+	 * @property {string | null} [lastRestoreNote]
 	 * @property {() => void} [onrefresh]
 	 * @property {() => void | Promise<void>} [onrestart]
+	 * @property {() => void | Promise<void>} [onsavecheckpoint]
+	 * @property {() => void | Promise<void>} [onrestorecheckpoint]
+	 * @property {() => void | Promise<void>} [onreplayjournal]
+	 * @property {() => void | Promise<void>} [onclearsession]
 	 */
 
 	/** @type {Props} */
@@ -15,8 +22,15 @@
 		environ = {},
 		loading = false,
 		kernelReady = false,
+		journalCount = 0,
+		hasCheckpoint = false,
+		lastRestoreNote = null,
 		onrefresh,
-		onrestart
+		onrestart,
+		onsavecheckpoint,
+		onrestorecheckpoint,
+		onreplayjournal,
+		onclearsession
 	} = $props();
 
 	let tab = $state(/** @type {'globals' | 'environ'} */ ('globals'));
@@ -33,7 +47,8 @@
 	<div class="nb-session__head">
 		<h2>Session</h2>
 		<p class="nb-session__hint">
-			One Pyodide kernel per tab — variables persist until you restart the kernel or reload the page.
+			Variables persist while this tab is open. Saved checkpoints + execution journal survive reload
+			(pickle + replay — not a full WASM snapshot).
 		</p>
 		<div class="nb-session__actions">
 			<button type="button" class="nb-chip" disabled={loading} onclick={() => onrefresh?.()}>
@@ -43,6 +58,30 @@
 				Restart kernel
 			</button>
 		</div>
+		<div class="nb-session__actions">
+			<button type="button" class="nb-chip" disabled={loading} onclick={() => onsavecheckpoint?.()}>
+				Save checkpoint
+			</button>
+			<button
+				type="button"
+				class="nb-chip"
+				disabled={loading || !hasCheckpoint}
+				onclick={() => onrestorecheckpoint?.()}
+			>
+				Restore checkpoint
+			</button>
+			<button
+				type="button"
+				class="nb-chip"
+				disabled={loading || journalCount === 0}
+				onclick={() => onreplayjournal?.()}
+			>
+				Replay journal ({journalCount})
+			</button>
+			<button type="button" class="nb-chip nb-chip--warn" disabled={loading} onclick={() => onclearsession?.()}>
+				Clear saved session
+			</button>
+		</div>
 		<p class="nb-session__status">
 			{#if loading}
 				Kernel busy…
@@ -50,6 +89,9 @@
 				Kernel ready
 			{:else}
 				Kernel not started — run a code cell
+			{/if}
+			{#if lastRestoreNote}
+				<br /><span class="nb-session__note">{lastRestoreNote}</span>
 			{/if}
 		</p>
 	</div>
