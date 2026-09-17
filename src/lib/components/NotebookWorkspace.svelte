@@ -15,11 +15,16 @@
 		toJupyterNotebook
 	} from '$lib/notebook/jupyterFormat.js';
 	import {
+		inspectPythonCompletions,
 		inspectPythonSession,
 		isPythonRuntimeReady,
 		resetPythonRuntime,
 		runPythonSource
 	} from '$lib/pyodide/runtime.js';
+	import {
+		clearDynamicPythonCompletions,
+		setDynamicPythonCompletions
+	} from '$lib/editor/monacoCompletionState.js';
 	import MonacoCodeCell from '$lib/components/MonacoCodeCell.svelte';
 	import MarkdownCell from '$lib/components/MarkdownCell.svelte';
 	import SessionPanel from '$lib/components/SessionPanel.svelte';
@@ -74,6 +79,19 @@
 		await saveSnapshot(snapshot);
 	}
 
+	async function refreshCompletionIndex() {
+		if (!isPythonRuntimeReady()) {
+			clearDynamicPythonCompletions();
+			return;
+		}
+		try {
+			const snapshot = await inspectPythonCompletions();
+			setDynamicPythonCompletions(snapshot);
+		} catch {
+			clearDynamicPythonCompletions();
+		}
+	}
+
 	async function refreshSessionInspector() {
 		if (typeof window === 'undefined') return;
 		if (!isPythonRuntimeReady()) {
@@ -92,10 +110,13 @@
 		} finally {
 			sessionLoading = false;
 		}
+
+		await refreshCompletionIndex();
 	}
 
 	async function restartKernel() {
 		resetPythonRuntime();
+		clearDynamicPythonCompletions();
 		pyodideStatus = 'idle';
 		cellOutputs = {};
 		sessionGlobals = {};

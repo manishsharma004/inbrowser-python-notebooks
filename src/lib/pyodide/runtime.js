@@ -73,7 +73,7 @@ import os
 
 _NB_SKIP_GLOBALS = set(dir(builtins)) | {
     "builtins", "json", "os", "_NB_SKIP_GLOBALS",
-    "nb_list_user_globals", "nb_list_environ"
+    "nb_list_user_globals", "nb_list_environ", "nb_completion_snapshot"
 }
 
 def nb_list_user_globals():
@@ -92,6 +92,35 @@ def nb_list_user_globals():
 
 def nb_list_environ():
     return {str(k): str(v) for k, v in os.environ.items()}
+
+def nb_completion_snapshot():
+    import sys
+    import types
+
+    modules = sorted(
+        set(getattr(sys, "builtin_module_names", ()))
+        | {k.split(".")[0] for k in sys.modules.keys() if not k.startswith("_")}
+    )
+
+    members = {}
+    for name, mod in list(sys.modules.items()):
+        if name.startswith("_"):
+            continue
+        try:
+            members[name] = [x for x in dir(mod) if not x.startswith("_")][:120]
+        except Exception:
+            continue
+
+    for name, value in globals().items():
+        if name.startswith("_") or name in _NB_SKIP_GLOBALS:
+            continue
+        try:
+            if isinstance(value, types.ModuleType):
+                members[name] = [x for x in dir(value) if not x.startswith("_")][:120]
+        except Exception:
+            continue
+
+    return json.dumps({"modules": modules, "members": members})
 `);
 
 	return sessionHelpersPromise;
@@ -171,6 +200,30 @@ export async function inspectPythonSession() {
 	environProxy.destroy();
 
 	return { globals, environ };
+}
+
+/**
+ * @typedef {Object} PythonCompletionSnapshot
+ * @property {string[]} modules
+ * @property {Record<string, string[]>} members
+ */
+
+/**
+ * @returns {Promise<PythonCompletionSnapshot>}
+ */
+export async function inspectPythonCompletions() {
+	const pyodide = await ensurePythonRuntime();
+	await installSessionHelpers(pyodide);
+
+	const jsonText = /** @type {string} */ (pyodide.runPython('nb_completion_snapshot()'));
+	const raw = /** @type {{ modules?: string[]; members?: Record<string, string[]> }} } */ (
+		JSON.parse(jsonText)
+	);
+
+	return {
+		modules: Array.isArray(raw.modules) ? raw.modules : [],
+		members: raw.members && typeof raw.members === 'object' ? raw.members : {}
+	};
 }
 
 /**
