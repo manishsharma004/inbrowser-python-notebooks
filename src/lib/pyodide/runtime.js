@@ -1,3 +1,8 @@
+import {
+	configureMatplotlibBackend,
+	NOTEBOOK_PRELOAD_PACKAGES
+} from './notebookPackages.js';
+
 const PYODIDE_VERSION = '0.29.4';
 const PYODIDE_INDEX_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 
@@ -6,6 +11,25 @@ let runtimePromise = null;
 
 /** @type {Promise<void> | null} */
 let sessionHelpersPromise = null;
+
+/** @type {Promise<void> | null} */
+let notebookPackagesPromise = null;
+
+/**
+ * @param {any} pyodide
+ */
+async function ensureNotebookPackages(pyodide) {
+	if (!notebookPackagesPromise) {
+		notebookPackagesPromise = (async () => {
+			await pyodide.loadPackage(NOTEBOOK_PRELOAD_PACKAGES);
+			await configureMatplotlibBackend(pyodide);
+		})().catch((error) => {
+			notebookPackagesPromise = null;
+			throw error;
+		});
+	}
+	return notebookPackagesPromise;
+}
 
 function appendPyodideScript() {
 	if (typeof window === 'undefined') {
@@ -49,11 +73,13 @@ export async function ensurePythonRuntime() {
 				throw new Error('Pyodide loader did not initialize.');
 			}
 			const pyodide = await loadPyodide({ indexURL: PYODIDE_INDEX_URL });
+			await ensureNotebookPackages(pyodide);
 			await installSessionHelpers(pyodide);
 			return pyodide;
 		})().catch((error) => {
 			runtimePromise = null;
 			sessionHelpersPromise = null;
+			notebookPackagesPromise = null;
 			throw error;
 		});
 	}
@@ -196,6 +222,7 @@ def nb_merge_pickle_checkpoint(b64_text, overwrite_names="0"):
 export function resetPythonRuntime() {
 	runtimePromise = null;
 	sessionHelpersPromise = null;
+	notebookPackagesPromise = null;
 }
 
 /**

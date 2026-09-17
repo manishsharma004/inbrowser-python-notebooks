@@ -30,7 +30,49 @@ export const pythonModuleMemberIndex = {
 	pathlib: ['Path', 'PurePath', 'PosixPath'],
 	typing: ['List', 'Dict', 'Set', 'Tuple', 'Optional', 'Union', 'Any', 'Callable'],
 	sys: ['argv', 'path', 'version', 'platform', 'modules', 'builtin_module_names'],
-	micropip: ['install', 'list']
+	micropip: ['install', 'list'],
+	numpy: [
+		'array',
+		'ndarray',
+		'zeros',
+		'ones',
+		'empty',
+		'arange',
+		'linspace',
+		'random',
+		'linalg',
+		'pi',
+		'e',
+		'inf',
+		'nan',
+		'reshape',
+		'concatenate',
+		'stack',
+		'mean',
+		'std',
+		'sum',
+		'min',
+		'max'
+	],
+	'matplotlib.pyplot': [
+		'plot',
+		'show',
+		'figure',
+		'subplot',
+		'subplots',
+		'xlabel',
+		'ylabel',
+		'title',
+		'legend',
+		'savefig',
+		'scatter',
+		'bar',
+		'hist',
+		'imshow',
+		'close',
+		'grid',
+		'axis'
+	]
 };
 
 /** @type {string[]} */
@@ -68,7 +110,9 @@ export const pythonImportableModules = [
 	'warnings',
 	'micropip',
 	'pyodide',
-	'js'
+	'js',
+	'numpy',
+	'matplotlib'
 ];
 
 /**
