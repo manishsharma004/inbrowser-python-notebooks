@@ -1,0 +1,37 @@
+{
+  "name": "inbrowser-python-notebooks",
+  "version": "0.1.0",
+  "private": true,
+  "description": "In-browser Python notebooks powered by Pyodide and an IndexedDB virtual file system",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite dev --host 0.0.0.0 --port 4174",
+    "start": "vite dev --host 0.0.0.0 --port 4174",
+    "build": "vite build && touch dist/.nojekyll",
+    "preview": "vite preview --host 0.0.0.0 --port 4174",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/manishsharma004/inbrowser-python-notebooks.git"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/manishsharma004/inbrowser-python-notebooks/issues"
+  },
+  "homepage": "https://github.com/manishsharma004/inbrowser-python-notebooks#readme",
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.57.1",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@types/node": "^25.9.1",
+    "svelte": "^5.55.2",
+    "svelte-check": "^4.4.6",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.7"
+  }
+}
