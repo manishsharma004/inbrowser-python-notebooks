@@ -34,7 +34,7 @@
 		clearDynamicPythonCompletions,
 		setDynamicPythonCompletions
 	} from '$lib/editor/monacoCompletionState.js';
-	import { syncNotebookCellsForAnalysis } from '$lib/editor/pyrightBridge.js';
+	import { syncNotebookCellsForAnalysis } from '$lib/editor/pyrightSync.js';
 	import MonacoCodeCell from '$lib/components/MonacoCodeCell.svelte';
 	import MarkdownCell from '$lib/components/MarkdownCell.svelte';
 	import SessionPanel from '$lib/components/SessionPanel.svelte';

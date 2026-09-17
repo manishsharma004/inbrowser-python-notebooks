@@ -17,7 +17,8 @@ export async function getPyrightProvider(monaco) {
 		providerPromise = (async () => {
 			try {
 				// @ts-ignore optional peer — install when VITE_ENABLE_PYRIGHT=true
-				const { MonacoPyrightProvider } = await import('monaco-pyright-lsp');
+				const mod = await import(/* @vite-ignore */ 'monaco-pyright-lsp');
+				const { MonacoPyrightProvider } = mod;
 				const provider = new MonacoPyrightProvider();
 				await provider.init(monaco);
 				return provider;
@@ -38,18 +39,4 @@ export async function attachPyrightToEditor(editor, monaco) {
 	const provider = await getPyrightProvider(monaco);
 	if (!provider) return;
 	await provider.setupDiagnostics(editor);
-}
-
-/**
- * Sync notebook cells into Pyright's virtual workspace (one module per notebook).
- * Full multi-file analysis requires the language server to see open documents;
- * this prepares cell paths for a future LSP workspace sync layer.
- *
- * @param {string} notebookName
- * @param {{ id: string; kind: string; source: string }[]} cells
- */
-export function syncNotebookCellsForAnalysis(notebookName, cells) {
-	if (import.meta.env.VITE_ENABLE_PYRIGHT !== 'true') return;
-	void notebookName;
-	void cells;
 }
