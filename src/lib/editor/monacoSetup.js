@@ -364,8 +364,10 @@ export async function createMonacoEditor(container, initialValue, options = {}) 
 		run: () => options.onRunCell?.()
 	});
 
-	const { attachPyrightToEditor } = await import('./pyrightBridge.js');
-	await attachPyrightToEditor(editor, monaco);
+	if (import.meta.env.VITE_ENABLE_PYRIGHT === 'true') {
+		const { attachPyrightToEditor } = await import('./pyrightBridge.js');
+		await attachPyrightToEditor(editor, monaco);
+	}
 
 	return {
 		editor,
