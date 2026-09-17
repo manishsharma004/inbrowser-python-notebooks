@@ -405,6 +405,37 @@ button:disabled {
 	color: color-mix(in srgb, var(--err) 75%, var(--ink));
 }
 
+.nb-run-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.65rem;
+	margin-top: 0.45rem;
+	padding: 0.25rem 0.1rem;
+	font-family: var(--font-mono);
+	font-size: 0.625rem;
+	color: var(--ink-faint);
+}
+
+.nb-run-meta__count {
+	color: var(--ink-dim);
+}
+
+.nb-run-meta__duration {
+	color: var(--run);
+}
+
+.nb-cell__exec {
+	display: block;
+	margin-top: 0.15rem;
+	font-family: var(--font-mono);
+	font-size: 0.5625rem;
+	color: var(--ink-faint);
+	line-height: 1.2;
+	max-width: 2.5rem;
+	text-align: right;
+}
+
 .nb-markdown-note {
 	margin: 0 0 0.35rem;
 	font-size: 0.75rem;
