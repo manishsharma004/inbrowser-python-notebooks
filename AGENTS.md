@@ -24,6 +24,7 @@ Kernel state across reload uses **pickle checkpoints + execution journal** in In
 
 - **Dev server:** `npm run dev` (listens on `0.0.0.0:4174` per `package.json`)
 - **Local URL:** `http://localhost:4174/inbrowser-python-notebooks/` (base path is always applied; Vite may pick the next free port if 4174 is busy)
+- **LAN HTTP:** Opening via `http://192.168.x.x:…` is a non-secure context; the app uses `randomId()` instead of `crypto.randomUUID()` so the workspace still mounts.
 - **Build:** `npm run build` → output in `dist/`
 - **Tests:** `npm test` (Node built-in test runner); `npm run check` for Svelte/TS
 

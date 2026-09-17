@@ -1,3 +1,5 @@
+import { randomId } from '../utils/randomId.js';
+
 /**
  * Pure in-memory VFS tree helpers (no IndexedDB / SvelteKit imports).
  */
@@ -6,7 +8,7 @@
  * @returns {import('./types.js').VfsSnapshot}
  */
 export function emptySnapshot() {
-	const rootId = crypto.randomUUID();
+	const rootId = randomId();
 	const now = Date.now();
 	return {
 		rootId,
@@ -32,7 +34,7 @@ export function emptySnapshot() {
  */
 export function createNode(snapshot, parentId, name, type, content = '') {
 	const node = {
-		id: crypto.randomUUID(),
+		id: randomId(),
 		name,
 		type,
 		parentId,
@@ -103,7 +105,7 @@ export function ensureStarterNotebook(snapshot) {
 				version: 1,
 				cells: [
 					{
-						id: crypto.randomUUID(),
+						id: randomId(),
 						kind: 'code',
 						source: 'print("Hello from Pyodide in your browser!")\n'
 					}
