@@ -89,10 +89,10 @@ export function dottedNameBeforeCursor(linePrefix) {
  * @returns {{ kind: 'import' | 'from-import', module?: string } | null}
  */
 export function importContext(linePrefix) {
-	if (/(?:^|\s)import\s+[\w.]*$/.test(linePrefix)) return { kind: 'import' };
-
 	const fromMatch = linePrefix.match(/(?:^|\s)from\s+([\w.]+)\s+import\s+[\w., ]*$/);
 	if (fromMatch) return { kind: 'from-import', module: fromMatch[1] };
+
+	if (/(?:^|\s)import\s+[\w.]*$/.test(linePrefix)) return { kind: 'import' };
 
 	return null;
 }

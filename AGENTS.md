@@ -18,6 +18,8 @@ Client-only Python notebooks: SvelteKit + Pyodide + IndexedDB virtual file syste
 
 Notebook UI includes Monaco code cells, markdown edit/preview, cell add/delete/reorder, import/export (`.ipynb` + `.ipynb.json`), and a session panel for interpreter variables and `os.environ`.
 
+Kernel state across reload uses **pickle checkpoints + execution journal** in IndexedDB (not a full Pyodide snapshot). Optional **Pyright-class** diagnostics: `npm install monaco-pyright-lsp` and `VITE_ENABLE_PYRIGHT=true npm run dev`. See `docs/KERNEL_AND_INTELLISENSE.md`.
+
 ## Cursor Cloud specific instructions
 
 - **Dev server:** `npm run dev` (listens on `0.0.0.0:4174` per `package.json`)

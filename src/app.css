@@ -592,6 +592,26 @@ button:disabled {
 	color: var(--ink-dim);
 }
 
+.nb-session__note {
+	color: var(--run);
+}
+
+.nb-restore-banner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.55rem 0.85rem;
+	border-bottom: 1px solid var(--border);
+	background: color-mix(in srgb, var(--run) 8%, var(--rail));
+	font-size: 0.75rem;
+	color: var(--ink-dim);
+}
+
+.nb-restore-banner strong {
+	color: var(--ink);
+}
+
 .nb-session__tabs {
 	display: flex;
 	gap: 0.35rem;
