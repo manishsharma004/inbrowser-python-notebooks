@@ -1,4 +1,11 @@
 import loader from '@monaco-editor/loader';
+import { getDynamicPythonCompletions } from './monacoCompletionState.js';
+import {
+	dottedNameBeforeCursor,
+	importContext,
+	importableModuleSuggestions,
+	membersForModule
+} from './pythonModuleIndex.js';
 import {
 	pythonBuiltinCompletions,
 	pythonBuiltinSignatures,
@@ -86,6 +93,58 @@ function registerPythonLanguageConfiguration(monaco) {
 }
 
 /**
+ * @param {import('monaco-editor').IRange} range
+ * @param {string} linePrefix
+ * @param {typeof import('monaco-editor')} monaco
+ * @returns {import('monaco-editor').languages.CompletionItem[]}
+ */
+function buildContextualSuggestions(range, linePrefix, monaco) {
+	const dynamic = getDynamicPythonCompletions();
+	/** @type {import('monaco-editor').languages.CompletionItem[]} */
+	const extra = [];
+
+	const importCtx = importContext(linePrefix);
+	if (importCtx?.kind === 'import') {
+		for (const mod of importableModuleSuggestions(dynamic.members, dynamic.modules)) {
+			extra.push({
+				label: mod,
+				kind: monaco.languages.CompletionItemKind.Module,
+				insertText: mod,
+				detail: 'module',
+				range
+			});
+		}
+	}
+
+	if (importCtx?.kind === 'from-import' && importCtx.module) {
+		for (const member of membersForModule(importCtx.module, dynamic.members)) {
+			extra.push({
+				label: member,
+				kind: monaco.languages.CompletionItemKind.Function,
+				insertText: member,
+				detail: `${importCtx.module} member`,
+				range
+			});
+		}
+	}
+
+	const dotted = dottedNameBeforeCursor(linePrefix);
+	if (dotted) {
+		for (const member of membersForModule(dotted, dynamic.members)) {
+			extra.push({
+				label: member,
+				kind: monaco.languages.CompletionItemKind.Method,
+				insertText: member,
+				detail: `${dotted} member`,
+				range
+			});
+		}
+	}
+
+	return extra;
+}
+
+/**
  * @param {typeof import('monaco-editor')} monaco
  */
 function registerPythonFeatures(monaco) {
@@ -130,9 +189,11 @@ function registerPythonFeatures(monaco) {
 					: undefined
 			}));
 
+			suggestions.push(...buildContextualSuggestions(range, linePrefix, monaco));
+
 			if (linePrefix.endsWith('.')) {
 				const objectName = linePrefix.slice(0, -1).trim().split(/\s+/).pop() ?? '';
-				const attrSuggestions = attributeHintsForObject(objectName).map((label) => ({
+				const attrSuggestions = attributeHintsForObject(objectName.split('.')[0]).map((label) => ({
 					label,
 					kind: monaco.languages.CompletionItemKind.Method,
 					insertText: label,
