@@ -148,7 +148,13 @@ def nb_completion_snapshot():
         except Exception:
             continue
 
-    return json.dumps({"modules": modules, "members": members})
+    user_globals = sorted(
+        name
+        for name in globals()
+        if not name.startswith("_") and name not in _NB_SKIP_GLOBALS
+    )
+
+    return json.dumps({"modules": modules, "members": members, "globals": user_globals})
 
 def nb_export_pickle_checkpoint():
     import pickle
@@ -327,6 +333,7 @@ export async function inspectPythonSession() {
  * @typedef {Object} PythonCompletionSnapshot
  * @property {string[]} modules
  * @property {Record<string, string[]>} members
+ * @property {string[]} globals
  */
 
 /**
@@ -337,13 +344,16 @@ export async function inspectPythonCompletions() {
 	await installSessionHelpers(pyodide);
 
 	const jsonText = /** @type {string} */ (pyodide.runPython('nb_completion_snapshot()'));
-	const raw = /** @type {{ modules?: string[]; members?: Record<string, string[]> }} } */ (
-		JSON.parse(jsonText)
-	);
+	const raw = /** @type {{
+		modules?: string[];
+		members?: Record<string, string[]>;
+		globals?: string[];
+	}} } */ (JSON.parse(jsonText));
 
 	return {
 		modules: Array.isArray(raw.modules) ? raw.modules : [],
-		members: raw.members && typeof raw.members === 'object' ? raw.members : {}
+		members: raw.members && typeof raw.members === 'object' ? raw.members : {},
+		globals: Array.isArray(raw.globals) ? raw.globals : []
 	};
 }
 

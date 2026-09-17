@@ -12,6 +12,7 @@ import {
 	pythonKeywordCompletions,
 	pythonStdlibModules
 } from './pythonBuiltins.js';
+import { sortCompletionItems } from './completionSort.js';
 
 const MONACO_CDN_VERSION = '0.56.0';
 
@@ -120,7 +121,7 @@ function buildContextualSuggestions(range, linePrefix, monaco) {
 		for (const member of membersForModule(importCtx.module, dynamic.members)) {
 			extra.push({
 				label: member,
-				kind: monaco.languages.CompletionItemKind.Function,
+				kind: monaco.languages.CompletionItemKind.Field,
 				insertText: member,
 				detail: `${importCtx.module} member`,
 				range
@@ -133,9 +134,25 @@ function buildContextualSuggestions(range, linePrefix, monaco) {
 		for (const member of membersForModule(dotted, dynamic.members)) {
 			extra.push({
 				label: member,
-				kind: monaco.languages.CompletionItemKind.Method,
+				kind: monaco.languages.CompletionItemKind.Field,
 				insertText: member,
 				detail: `${dotted} member`,
+				range
+			});
+		}
+	}
+
+	const onImportLine =
+		importCtx?.kind === 'import' ||
+		importCtx?.kind === 'from-import' ||
+		linePrefix.trim().endsWith('.');
+	if (!onImportLine && !dotted) {
+		for (const name of dynamic.globals) {
+			extra.push({
+				label: name,
+				kind: monaco.languages.CompletionItemKind.Variable,
+				insertText: name,
+				detail: 'kernel global',
 				range
 			});
 		}
@@ -202,7 +219,9 @@ function registerPythonFeatures(monaco) {
 				suggestions.push(...attrSuggestions);
 			}
 
-			return { suggestions };
+			return { suggestions: /** @type {import('monaco-editor').languages.CompletionItem[]} */ (
+				sortCompletionItems(suggestions)
+			) };
 		}
 	});
 

@@ -1,0 +1,8 @@
+# Archify ignore rules
+.git/
+node_modules/
+.venv/
+.archify/
+dist/
+build/
+.svelte-kit/

@@ -1,0 +1,76 @@
+{
+  "project": {
+    "name": "inbrowser-python-notebooks",
+    "description": "Client-only Python notebooks: SvelteKit, Pyodide, Monaco, IndexedDB VFS"
+  },
+  "defaults": {
+    "sourceRoot": ".",
+    "outputDir": ".archify"
+  },
+  "skillInstall": {
+    "mode": "project",
+    "platform": "codex",
+    "platforms": [
+      "codex",
+      "claude-code"
+    ],
+    "installedAt": "2026-09-17T19:00:10.388Z",
+    "version": 1,
+    "target": {
+      "platform": "codex",
+      "path": "/workspace-2/.agents/skills/archify",
+      "projectRoot": "/workspace-2"
+    },
+    "targets": [
+      {
+        "platform": "codex",
+        "path": "/workspace-2/.agents/skills/archify",
+        "projectRoot": "/workspace-2"
+      },
+      {
+        "platform": "claude-code",
+        "path": "/workspace-2/.claude/skills/archify",
+        "projectRoot": "/workspace-2"
+      }
+    ]
+  },
+  "analysis": {
+    "enabled": true,
+    "pipeline": {
+      "detect": true,
+      "extract": true,
+      "build": true,
+      "cluster": true,
+      "analyze": true,
+      "export": true
+    },
+    "detect": {
+      "followSymlinks": false,
+      "includeHidden": false,
+      "maxFileSizeBytes": 1048576,
+      "includeGlobs": [],
+      "excludeGlobs": []
+    },
+    "semantic": {
+      "enabled": false,
+      "mode": "docs_first",
+      "includeFileTypes": [
+        "document"
+      ],
+      "includeExtensions": [
+        ".md",
+        ".mdx",
+        ".txt",
+        ".rst"
+      ],
+      "maxDocumentBytes": 262144,
+      "maxChunksPerDocument": 32,
+      "maxChunkBytes": 8192,
+      "backend": "none"
+    }
+  },
+  "languageScope": {
+    "include": [],
+    "exclude": []
+  }
+}
