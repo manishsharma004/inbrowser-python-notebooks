@@ -22,6 +22,10 @@ The Pyodide kernel preloads **numpy** and **matplotlib**. `plt.show()` appears a
 
 Kernel state across reload uses **pickle checkpoints + execution journal** in IndexedDB (not a full Pyodide snapshot). Optional **Pyright-class** diagnostics: `npm install monaco-pyright-lsp` and `VITE_ENABLE_PYRIGHT=true npm run dev`. See `docs/KERNEL_AND_INTELLISENSE.md`.
 
+## Architecture documentation (Archify)
+
+Grounded architecture lives in **`archify.md`** (regenerate with `npm run archify` after `npm install`). Analysis cache is under `.archify/` (gitignored). Config: `archify.config.json`, ignore rules: `.archifyignore`.
+
 ## Cursor Cloud specific instructions
 
 - **Dev server:** `npm run dev` (listens on `0.0.0.0:4174` per `package.json`)
