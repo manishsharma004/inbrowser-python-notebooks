@@ -23,6 +23,17 @@
 	import MonacoCodeCell from '$lib/components/MonacoCodeCell.svelte';
 	import MarkdownCell from '$lib/components/MarkdownCell.svelte';
 	import SessionPanel from '$lib/components/SessionPanel.svelte';
+	import { formatDuration, formatRunSummary, formatRunTimestamp } from '$lib/notebook/formatRunMeta.js';
+
+	/**
+	 * @typedef {Object} CellRunRecord
+	 * @property {boolean} ok
+	 * @property {string} text
+	 * @property {number} startedAt
+	 * @property {number} finishedAt
+	 * @property {number} durationMs
+	 * @property {number} executionCount
+	 */
 
 	/** @type {import('$lib/vfs/types.js').VfsSnapshot | null} */
 	let snapshot = $state(null);
@@ -31,7 +42,7 @@
 	let notebook = $state(null);
 	let running = $state(false);
 	let pyodideStatus = $state('idle');
-	/** @type {Record<string, { ok: boolean, text: string }>} */
+	/** @type {Record<string, CellRunRecord>} */
 	let cellOutputs = $state({});
 	/** @type {Record<string, string>} */
 	let sessionGlobals = $state({});
@@ -97,7 +108,11 @@
 
 		running = true;
 		pyodideStatus = 'loading';
+		const startedAt = Date.now();
+		const timerStart = performance.now();
 		const result = await runPythonSource(cell.source);
+		const durationMs = performance.now() - timerStart;
+		const finishedAt = Date.now();
 		pyodideStatus = 'ready';
 		running = false;
 
@@ -106,11 +121,17 @@
 		if (result.stderr) chunks.push(result.stderr);
 		if (result.error) chunks.push(result.error);
 
+		const previousCount = cellOutputs[cellId]?.executionCount ?? 0;
+
 		cellOutputs = {
 			...cellOutputs,
 			[cellId]: {
 				ok: result.ok,
-				text: chunks.join('\n') || (result.ok ? '—' : 'Execution failed.')
+				text: chunks.join('\n') || (result.ok ? '—' : 'Execution failed.'),
+				startedAt,
+				finishedAt,
+				durationMs,
+				executionCount: previousCount + 1
 			}
 		};
 
@@ -316,6 +337,15 @@
 									</button>
 								{/if}
 								<span class="nb-cell__index">{i + 1}</span>
+								{#if cell.kind === 'code' && cellOutputs[cell.id]}
+									<span class="nb-cell__exec" title={formatRunSummary(
+										cellOutputs[cell.id].startedAt,
+										cellOutputs[cell.id].finishedAt,
+										cellOutputs[cell.id].durationMs
+									)}>
+										In [{cellOutputs[cell.id].executionCount}]
+									</span>
+								{/if}
 							</div>
 							<div class="nb-cell__body">
 								<div class="nb-cell-toolbar">
@@ -354,6 +384,13 @@
 										onrun={() => runCell(cell.id)}
 									/>
 									{#if cellOutputs[cell.id]}
+										<div class="nb-run-meta" aria-live="polite">
+											<span class="nb-run-meta__count">In [{cellOutputs[cell.id].executionCount}]</span>
+											<span class="nb-run-meta__time" title="Started {formatRunTimestamp(cellOutputs[cell.id].startedAt)}">
+												{formatRunTimestamp(cellOutputs[cell.id].finishedAt)}
+											</span>
+											<span class="nb-run-meta__duration">{formatDuration(cellOutputs[cell.id].durationMs)}</span>
+										</div>
 										<pre
 											class="nb-output"
 											class:nb-output--err={!cellOutputs[cell.id].ok}
