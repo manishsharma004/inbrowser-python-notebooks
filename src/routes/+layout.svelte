@@ -7,7 +7,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>In-browser Python notebooks</title>
+	<title>notebooks · pyodide</title>
 </svelte:head>
 
 {@render children()}

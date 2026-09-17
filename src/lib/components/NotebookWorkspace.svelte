@@ -62,7 +62,7 @@
 			...cellOutputs,
 			[cellId]: {
 				ok: result.ok,
-				text: chunks.join('\n') || (result.ok ? '(no output)' : 'Execution failed.')
+				text: chunks.join('\n') || (result.ok ? '—' : 'Execution failed.')
 			}
 		};
 	}
@@ -72,7 +72,7 @@
 		const file = createNode(
 			snapshot,
 			snapshot.rootId,
-			`notebook-${Date.now()}.ipynb.json`,
+			`untitled-${files.length + 1}.ipynb.json`,
 			'file',
 			serializeNotebook({
 				version: 1,
@@ -87,78 +87,118 @@
 		if (!snapshot) return [];
 		return listChildren(snapshot, snapshot.rootId).filter((n) => n.type === 'file');
 	});
+
+	const activeName = $derived.by(() => {
+		const file = files.find((f) => f.id === activeFileId);
+		return file?.name ?? 'notebook';
+	});
+
+	const kernelLabel = $derived.by(() => {
+		if (pyodideStatus === 'loading' || running) return 'Python · starting';
+		if (pyodideStatus === 'ready') return 'Python · idle';
+		return 'Python · cold';
+	});
+
+	const kernelDotClass = $derived.by(() => {
+		if (pyodideStatus === 'loading' || running) return 'nb-kernel__dot nb-kernel__dot--busy';
+		if (pyodideStatus === 'ready') return 'nb-kernel__dot nb-kernel__dot--ready';
+		return 'nb-kernel__dot';
+	});
 </script>
 
 {#if !snapshot || !notebook}
-	<p class="muted" style="padding: 2rem">Loading workspace…</p>
+	<p class="nb-loading">mounting workspace…</p>
 {:else}
-	<div class="app-shell">
-		<aside class="sidebar">
-			<p class="eyebrow">IndexedDB VFS</p>
-			<h2 style="margin: 0; font-size: 1.1rem">Notebooks</h2>
-			<p class="muted" style="font-size: 0.85rem; margin: 0.35rem 0 0">
-				Files persist in your browser only.
-			</p>
-			<ul class="file-tree">
-				{#each files as file (file.id)}
-					<li>
-						<button
-							type="button"
-							aria-current={file.id === activeFileId ? 'page' : undefined}
-							onclick={() => selectFile(file.id, file.content ?? '')}
-						>
-							{file.name}
-						</button>
-					</li>
-				{/each}
-			</ul>
-			<div class="toolbar">
-				<button type="button" class="pill" onclick={addNotebook}>New notebook</button>
+	<div class="nb-app">
+		<header class="nb-topbar">
+			<div class="nb-topbar__brand">
+				<span class="nb-topbar__title">{activeName}</span>
+				<span class="nb-topbar__path">~/workspace</span>
 			</div>
-			<p class="muted" style="font-size: 0.75rem; margin-top: 1.5rem">
-				Pyodide: {pyodideStatus === 'loading' ? 'loading…' : 'on demand'}
-			</p>
-		</aside>
+			<div class="nb-kernel" title="Pyodide loads from CDN on first run">
+				<span class={kernelDotClass} aria-hidden="true"></span>
+				<span>{kernelLabel}</span>
+			</div>
+		</header>
 
-		<main class="main">
-			<p class="eyebrow">Notebook server (client-only)</p>
-			<h1 style="margin: 0 0 0.5rem; font-size: 1.5rem">In-browser Python</h1>
-			<p class="muted" style="margin: 0 0 1rem">
-				Phase 0 shell: IndexedDB-backed files + Pyodide cell execution. See
-				<code>docs/IMPLEMENTATION_PLAN.md</code> for the full roadmap.
-			</p>
-
-			{#each notebook.cells as cell (cell.id)}
-				<section class="cell panel" style="padding: 0.75rem">
-					{#if cell.kind === 'markdown'}
-						<p class="muted">Markdown cells — planned in phase 2.</p>
-						<textarea
-							bind:value={cell.source}
-							onchange={persistNotebook}
-							aria-label="Markdown cell"
-						></textarea>
-					{:else}
-						<textarea bind:value={cell.source} onchange={persistNotebook} aria-label="Code cell"
-						></textarea>
-						<div class="toolbar">
+		<div class="nb-body">
+			<aside class="nb-rail" aria-label="Workspace files">
+				<div class="nb-rail__head">
+					<p class="nb-rail__label">local store</p>
+					<p class="nb-rail__hint">Notebooks live in IndexedDB on this device.</p>
+				</div>
+				<ul class="nb-filelist">
+					{#each files as file (file.id)}
+						<li>
 							<button
 								type="button"
-								class="action-link"
-								disabled={running}
-								onclick={() => runCell(cell.id)}
+								aria-current={file.id === activeFileId ? 'page' : undefined}
+								onclick={() => selectFile(file.id, file.content ?? '')}
 							>
-								{running ? 'Running…' : 'Run cell'}
+								{file.name}
 							</button>
-						</div>
-						{#if cellOutputs[cell.id]}
-							<pre
-								class="output"
-								class:output--error={!cellOutputs[cell.id].ok}
-							>{cellOutputs[cell.id].text}</pre>
-						{/if}
-					{/if}
-				</section>
-			{/each}
-		</main>
+						</li>
+					{/each}
+				</ul>
+				<div class="nb-rail__foot">
+					<button type="button" class="nb-new-btn" onclick={addNotebook}>+ new notebook</button>
+				</div>
+			</aside>
+
+			<div class="nb-canvas">
+				<div class="nb-canvas__inner">
+					{#each notebook.cells as cell, i (cell.id)}
+						<article class="nb-cell">
+							<div class="nb-cell__gutter">
+								{#if cell.kind === 'code'}
+									<button
+										type="button"
+										class="nb-run"
+										disabled={running}
+										title="Run cell"
+										aria-label="Run cell {i + 1}"
+										onclick={() => runCell(cell.id)}
+									>
+										▶
+									</button>
+								{/if}
+								<span class="nb-cell__index">{i + 1}</span>
+							</div>
+							<div class="nb-cell__body">
+								{#if cell.kind === 'markdown'}
+									<p class="nb-markdown-note">Markdown rendering not wired yet.</p>
+									<textarea
+										class="nb-editor"
+										bind:value={cell.source}
+										onchange={persistNotebook}
+										aria-label="Markdown cell {i + 1}"
+										spellcheck="false"
+									></textarea>
+								{:else}
+									<textarea
+										class="nb-editor"
+										bind:value={cell.source}
+										onchange={persistNotebook}
+										aria-label="Code cell {i + 1}"
+										spellcheck="false"
+									></textarea>
+									{#if cellOutputs[cell.id]}
+										<pre
+											class="nb-output"
+											class:nb-output--err={!cellOutputs[cell.id].ok}
+										>{cellOutputs[cell.id].text}</pre>
+									{/if}
+								{/if}
+							</div>
+						</article>
+					{/each}
+				</div>
+			</div>
+		</div>
+
+		<footer class="nb-statusbar">
+			<span>cells {notebook.cells.length}</span>
+			<span>wasm · pyodide 0.29</span>
+		</footer>
 	</div>
 {/if}
