@@ -8,8 +8,9 @@ Pyodide cannot snapshot the entire WASM interpreter cheaply. We use a **two-laye
 
 ### A. Pickle checkpoint (IndexedDB)
 
-After each successful code cell run, the app attempts to serialize **pickle-able user globals** into a base64 blob stored under `kernel-session-v1` in the same IndexedDB database as the workspace.
+After each successful code cell run, the app attempts to serialize **pickle-able user globals** into a base64 blob stored in IndexedDB **per notebook file** (`kernel-session-v1:<fileId>`).
 
+- **Switching notebooks** flushes the live kernel into the previous file’s record and loads the selected file’s checkpoint (when present).
 - **Restore checkpoint** loads those names back into a fresh kernel after reload.
 - **Limitations:** modules, open files, lambdas/closures tied to old globals, C extensions, and some Pyodide objects may fail to pickle. Failed names are listed in the restore result.
 
@@ -27,7 +28,9 @@ Every successful run appends `{ source, ranAt }` to a capped journal (200 entrie
 | **Save checkpoint** | Manual pickle snapshot now |
 | **Restore checkpoint** | Import last saved blob |
 | **Replay journal** | Re-run stored cell sources |
-| **Clear saved session** | Remove blob + journal from IndexedDB |
+| **Clear saved session** | Remove blob + journal from IndexedDB for **this notebook** |
+
+**Import variables from another notebook** (Session panel): merges that file’s saved checkpoint into the current kernel — **keep existing** skips name clashes; **overwrite** replaces conflicting names.
 
 On load, if a saved session exists, a banner offers restore/replay.
 

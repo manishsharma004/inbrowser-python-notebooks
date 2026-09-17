@@ -20,6 +20,7 @@
 		inspectPythonCompletions,
 		inspectPythonSession,
 		isPythonRuntimeReady,
+		mergeKernelCheckpoint,
 		replayKernelJournal,
 		resetPythonRuntime,
 		runPythonSource
@@ -27,6 +28,7 @@
 	import {
 		appendKernelJournalEntry,
 		clearKernelSession,
+		emptyKernelSession,
 		loadKernelSession,
 		saveKernelSession
 	} from '$lib/pyodide/kernelSessionStore.js';
@@ -82,6 +84,85 @@
 	let importInput = $state(null);
 	let railWidth = $state(248);
 	let sessionWidth = $state(304);
+	let importSessionSourceId = $state('');
+
+	async function reloadKernelSessionMeta(fileId = activeFileId) {
+		if (!fileId) {
+			kernelSession = emptyKernelSession();
+			showRestoreBanner = false;
+			return;
+		}
+		kernelSession = await loadKernelSession(fileId);
+		showRestoreBanner = Boolean(
+			(pyodideStatus !== 'ready' || Object.keys(sessionGlobals).length === 0) &&
+				(kernelSession.pickleCheckpoint || kernelSession.journal.length > 0)
+		);
+	}
+
+	/** @param {string} fileId */
+	async function flushKernelToFile(fileId) {
+		if (!fileId || !isPythonRuntimeReady()) return;
+		try {
+			const exported = await exportKernelCheckpoint();
+			if (!exported.checkpoint) return;
+			await saveKernelSession(fileId, { pickleCheckpoint: exported.checkpoint });
+		} catch {
+			/* ignore flush errors */
+		}
+	}
+
+	/** @param {string} fileId */
+	async function switchKernelToFile(fileId) {
+		resetPythonRuntime();
+		clearDynamicPythonCompletions();
+		pyodideStatus = 'idle';
+		sessionGlobals = {};
+		sessionEnviron = {};
+		lastRestoreNote = null;
+
+		await reloadKernelSessionMeta(fileId);
+		const session = kernelSession;
+		if (!session?.pickleCheckpoint && !session?.journal.length) {
+			showRestoreBanner = false;
+			return;
+		}
+
+		if (session.pickleCheckpoint) {
+			sessionLoading = true;
+			running = true;
+			pyodideStatus = 'loading';
+			try {
+				const result = await importKernelCheckpoint(session.pickleCheckpoint);
+				pyodideStatus = 'ready';
+				lastRestoreNote = `Loaded this notebook's session (${result.restored.length} names)`;
+				showRestoreBanner = false;
+				await refreshSessionInspector();
+			} finally {
+				running = false;
+				sessionLoading = false;
+			}
+		} else {
+			showRestoreBanner = true;
+		}
+	}
+
+	async function selectFile(fileId, rawContent) {
+		if (fileId !== activeFileId) {
+			if (activeFileId) {
+				await flushKernelToFile(activeFileId);
+			}
+			activeFileId = fileId;
+			notebook = parseNotebook(rawContent);
+			cellOutputs = {};
+			importSessionSourceId = '';
+			await switchKernelToFile(fileId);
+		} else {
+			notebook = parseNotebook(rawContent);
+		}
+		if (notebook) {
+			syncNotebookCellsForAnalysis(fileId, notebook.cells);
+		}
+	}
 
 	/** @param {'rail' | 'session'} pane @param {PointerEvent} event */
 	function startPaneResize(pane, event) {
@@ -122,16 +203,6 @@
 		handle.addEventListener('pointercancel', onEnd);
 	}
 
-	async function reloadKernelSessionMeta() {
-		kernelSession = await loadKernelSession();
-		showRestoreBanner = Boolean(
-			kernelSession.pickleCheckpoint || kernelSession.journal.length > 0
-		);
-		if (kernelSession.lastRestoreNote && !lastRestoreNote) {
-			lastRestoreNote = kernelSession.lastRestoreNote;
-		}
-	}
-
 	onMount(async () => {
 		const layout = loadPanelLayout();
 		railWidth = layout.rail;
@@ -140,20 +211,10 @@
 		const starter = ensureStarterNotebook(loaded);
 		await saveSnapshot(loaded);
 		snapshot = loaded;
-		await reloadKernelSessionMeta();
 		if (starter) {
-			selectFile(starter.id, starter.content ?? '');
+			await selectFile(starter.id, starter.content ?? '');
 		}
 	});
-
-	function selectFile(fileId, rawContent) {
-		activeFileId = fileId;
-		notebook = parseNotebook(rawContent);
-		cellOutputs = {};
-		if (notebook) {
-			syncNotebookCellsForAnalysis(fileId, notebook.cells);
-		}
-	}
 
 	async function persistNotebook() {
 		if (!snapshot || !activeFileId || !notebook) return;
@@ -175,15 +236,16 @@
 	}
 
 	async function persistKernelCheckpoint() {
+		if (!activeFileId) return;
 		try {
 			const exported = await exportKernelCheckpoint();
 			if (!exported.checkpoint) return;
-			await saveKernelSession({
+			await saveKernelSession(activeFileId, {
 				pickleCheckpoint: exported.checkpoint,
 				lastRestoreNote: `Checkpoint saved (${exported.variableCount} pickle-able names)`
 			});
 			lastRestoreNote = `Checkpoint saved (${exported.variableCount} pickle-able names)`;
-			await reloadKernelSessionMeta();
+			await reloadKernelSessionMeta(activeFileId);
 		} catch {
 			/* kernel may not be ready yet */
 		}
@@ -206,10 +268,10 @@
 				result.failed.length ? `; ${result.failed.length} failed` : ''
 			}${result.error ? ` — ${result.error}` : ''}`;
 			lastRestoreNote = note;
-			await saveKernelSession({ lastRestoreNote: note });
+			await saveKernelSession(activeFileId, { lastRestoreNote: note });
 			pyodideStatus = 'ready';
 			showRestoreBanner = false;
-			await reloadKernelSessionMeta();
+			await reloadKernelSessionMeta(activeFileId);
 			await refreshSessionInspector();
 		} finally {
 			running = false;
@@ -226,10 +288,10 @@
 			const stats = await replayKernelJournal(kernelSession.journal);
 			const note = `Replayed journal: ${stats.ok} ok, ${stats.failed} failed`;
 			lastRestoreNote = note;
-			await saveKernelSession({ lastRestoreNote: note });
+			await saveKernelSession(activeFileId, { lastRestoreNote: note });
 			pyodideStatus = 'ready';
 			showRestoreBanner = false;
-			await reloadKernelSessionMeta();
+			await reloadKernelSessionMeta(activeFileId);
 			await refreshSessionInspector();
 		} finally {
 			running = false;
@@ -238,10 +300,42 @@
 	}
 
 	async function clearSavedSession() {
-		await clearKernelSession();
-		lastRestoreNote = 'Cleared saved kernel session';
+		if (!activeFileId) return;
+		await clearKernelSession(activeFileId);
+		lastRestoreNote = 'Cleared saved session for this notebook';
 		showRestoreBanner = false;
-		await reloadKernelSessionMeta();
+		await reloadKernelSessionMeta(activeFileId);
+	}
+
+	async function importVariablesFromNotebook(overwriteExisting = false) {
+		if (!activeFileId || !importSessionSourceId || importSessionSourceId === activeFileId) {
+			return;
+		}
+		const other = await loadKernelSession(importSessionSourceId);
+		if (!other.pickleCheckpoint) {
+			lastRestoreNote = 'That notebook has no saved checkpoint yet — run code there first.';
+			return;
+		}
+
+		sessionLoading = true;
+		running = true;
+		pyodideStatus = 'loading';
+		try {
+			const result = await mergeKernelCheckpoint(other.pickleCheckpoint, overwriteExisting);
+			const sourceName =
+				files.find((file) => file.id === importSessionSourceId)?.name ?? 'other notebook';
+			lastRestoreNote = `Imported ${result.restored.length} name(s) from ${sourceName}${
+				result.skipped.length ? `; kept ${result.skipped.length} existing` : ''
+			}${result.failed.length ? `; ${result.failed.length} failed` : ''}${
+				result.error ? ` — ${result.error}` : ''
+			}`;
+			pyodideStatus = 'ready';
+			await persistKernelCheckpoint();
+			await refreshSessionInspector();
+		} finally {
+			running = false;
+			sessionLoading = false;
+		}
 	}
 
 	async function refreshSessionInspector() {
@@ -309,7 +403,7 @@
 		};
 
 		if (result.ok) {
-			await appendKernelJournalEntry(cell.source, activeFileId);
+			await appendKernelJournalEntry(activeFileId, cell.source);
 			await persistKernelCheckpoint();
 			await reloadKernelSessionMeta();
 		}
@@ -375,7 +469,7 @@
 			})
 		);
 		await saveSnapshot(snapshot);
-		selectFile(file.id, file.content ?? '');
+		await selectFile(file.id, file.content ?? '');
 	}
 
 	function triggerImport() {
@@ -405,7 +499,7 @@
 			serializeNotebook(imported)
 		);
 		await saveSnapshot(snapshot);
-		selectFile(node.id, node.content ?? '');
+		await selectFile(node.id, node.content ?? '');
 	}
 
 	function exportNotebookJson() {
@@ -430,6 +524,8 @@
 		const file = files.find((f) => f.id === activeFileId);
 		return file?.name ?? 'notebook';
 	});
+
+	const otherSessionSources = $derived.by(() => files.filter((file) => file.id !== activeFileId));
 
 	const kernelLabel = $derived.by(() => {
 		if (pyodideStatus === 'loading' || running) return 'Python · starting';
@@ -489,7 +585,7 @@
 							<button
 								type="button"
 								aria-current={file.id === activeFileId ? 'page' : undefined}
-								onclick={() => selectFile(file.id, file.content ?? '')}
+								onclick={() => void selectFile(file.id, file.content ?? '')}
 							>
 								{file.name}
 							</button>
@@ -640,6 +736,11 @@
 				journalCount={kernelSession?.journal.length ?? 0}
 				hasCheckpoint={Boolean(kernelSession?.pickleCheckpoint)}
 				lastRestoreNote={lastRestoreNote}
+				otherNotebooks={otherSessionSources}
+				importSourceId={importSessionSourceId}
+				onimportsourcechange={(id) => (importSessionSourceId = id)}
+				onimportvariables={() => importVariablesFromNotebook(false)}
+				onimportvariablesoverwrite={() => importVariablesFromNotebook(true)}
 				onrefresh={refreshSessionInspector}
 				onrestart={restartKernel}
 				onsavecheckpoint={saveCheckpointNow}
