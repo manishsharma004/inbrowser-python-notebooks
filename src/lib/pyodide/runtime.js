@@ -1,7 +1,4 @@
-import {
-	configureMatplotlibBackend,
-	NOTEBOOK_PRELOAD_PACKAGES
-} from './notebookPackages.js';
+import { loadNotebookPackages } from './notebookPackages.js';
 
 const PYODIDE_VERSION = '0.29.4';
 const PYODIDE_INDEX_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
@@ -21,8 +18,7 @@ let notebookPackagesPromise = null;
 async function ensureNotebookPackages(pyodide) {
 	if (!notebookPackagesPromise) {
 		notebookPackagesPromise = (async () => {
-			await pyodide.loadPackage(NOTEBOOK_PRELOAD_PACKAGES);
-			await configureMatplotlibBackend(pyodide);
+			await loadNotebookPackages(pyodide);
 		})().catch((error) => {
 			notebookPackagesPromise = null;
 			throw error;
