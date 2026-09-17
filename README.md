@@ -28,8 +28,10 @@ npm run build   # static export to dist/
 
 ## Deploy (GitHub Pages)
 
-1. Enable **Pages → Build and deployment → GitHub Actions** for this repository.
-2. Push to `main`; [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds and deploys `dist/`.
+1. Push to `main` (or run the workflow manually). [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs checks, builds `dist/`, and pushes to the **`gh-pages`** branch.
+2. In the repo **Settings → Pages**, set **Build and deployment → Source** to **Deploy from a branch**, branch **`gh-pages`**, folder **`/ (root)`**. (One-time setup; skip if already configured.)
+
+The previous workflow used `actions/configure-pages`, which fails with **Not Found** until Pages is enabled with the **GitHub Actions** source—and the default `GITHUB_TOKEN` cannot create that site. Branch deploy avoids that bootstrap step.
 
 Published URL: `https://manishsharma004.github.io/inbrowser-python-notebooks/`
 
