@@ -1,30 +1,33 @@
-# Notebook UX parity (Svelte + Pyodide)
+# Notebook UX parity (Svelte + Pyodide WASM)
 
-We stay **client-only** (SvelteKit, IndexedDB VFS, Pyodide WASM). This checklist tracks behaviors inspired by [Notebook v7](https://jupyter.org/enhancement-proposals/notebook-v7/), [`jupyter/notebook`](https://github.com/jupyter/notebook), and [`try-jupyter`](https://github.com/jupyter/try-jupyter)—implemented in our stack, not via Jupyter Server or JupyterLite.
+Client-only notebooks aligned with Jupyter Notebook v7 / try-jupyter **behavior**, implemented in Svelte + IndexedDB + a **Pyodide Web Worker** kernel (no Jupyter Server).
 
-## Shipped in this repo
+## Implemented
 
 | Area | Behavior |
 |------|----------|
-| **nbformat export** | `.ipynb` includes `stream` / `display_data` (PNG) / errors from cell runs; `execution_count` preserved |
-| **nbformat import** | Restores outputs into persisted `lastRun`; `metadata.scrolled`; notebook `trusted` from cell trust flags |
-| **Persisted outputs** | `.ipynb.json` stores `lastRun` per code cell; reload restores display without re-executing |
-| **Kernel status** | Cold / busy / idle / restarting labels (Notebook-style wording) |
-| **Running panel** | File rail **Running** tab shows kernel state and active cell |
-| **Output scroll** | Long stdout uses scrolled output (~100 lines), honors cell `metadata.scrolled` |
-| **Trust** | Imported notebooks default **Not trusted**; user can trust (export marks cells trusted) |
-| **Full width** | Toggle widens notebook canvas; stored in document metadata |
-| **Shortcuts** | Ctrl/Cmd+Enter run cell; Shift+Enter run and scroll to next cell |
+| **Kernel** | Dedicated **Web Worker** + Pyodide 0.29; **Interrupt** terminates worker; **Restart** resets worker |
+| **Packages** | Preload **numpy**, **matplotlib**, **scipy**, **pillow** in worker |
+| **VFS → kernel** | Workspace files (except `.ipynb.json`) sync to `/workspace/...` before each cell run |
+| **Starter content** | `welcome.ipynb.json` tutorial + `data/iris.csv` on empty workspace |
+| **nbformat** | Import/export `.ipynb`: streams, PNG, HTML (stored), errors, `execution_count`, **raw** cells |
+| **Persisted outputs** | `lastRun` on code cells in `.ipynb.json` |
+| **Kernel UI** | Cold / busy / idle / restarting; **Running** rail tab |
+| **Notebook UI** | Trust banner, trusted **HTML** outputs, full width, TOC, collapsible **h2** sections |
+| **Cell ops** | Raw cells, duplicate, run all, clear outputs, run/advance shortcuts |
+| **Output UX** | Scrolled long text (~100 lines), inline matplotlib PNG |
+| **Tests** | Node unit tests + Playwright smoke (`npm run test:e2e`) |
 
-## Planned / not in scope (browser limits)
+## Explicitly out of scope
 
-- Jupyter Server checkpoints, multi-tab document opener, terminals, ipywidgets, debugger, real-time collaboration
-- Full HTML `display_data` rendering (markdown remains sanitized)
+Server checkpoints, terminals, ipywidgets, debugger, collaboration, multi-tab document manager.
 
 ## Key modules
 
-- `src/lib/notebook/nbformatOutputs.js` — Jupyter output ↔ run snapshot
-- `src/lib/notebook/notebookRunState.js` — persist runs on cells
-- `src/lib/notebook/jupyterFormat.js` — `.ipynb` import/export
+- `src/lib/pyodide/pyodide-kernel.worker.js` — WASM kernel
+- `src/lib/pyodide/kernelWorkerClient.js` — RPC to worker
+- `src/lib/pyodide/runtime.js` — public kernel API
+- `src/lib/notebook/nbformatOutputs.js` — Jupyter I/O
+- `src/lib/vfs/workspaceFilesForKernel.js` — file projection
 
-Regenerate architecture docs: `npm run archify`.
+Regenerate architecture: `npm run archify`.

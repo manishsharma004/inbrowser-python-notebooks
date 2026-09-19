@@ -18,9 +18,9 @@ Client-only Python notebooks: SvelteKit + Pyodide + IndexedDB virtual file syste
 
 Notebook UI includes Monaco code cells, markdown edit/preview, cell add/delete/reorder, import/export (`.ipynb` + `.ipynb.json`), and a session panel for interpreter variables and `os.environ`.
 
-The Pyodide kernel preloads **numpy** and **matplotlib**. `plt.show()` appears as inline PNG output under the code cell (restart kernel after upgrading).
+The Pyodide kernel runs in a **Web Worker** (`pyodide-kernel.worker.js`) and preloads **numpy**, **matplotlib**, **scipy**, and **pillow**. Workspace files sync to `/workspace/...` before runs; `plt.show()` appears as inline PNG output under the code cell.
 
-Kernel state across reload uses **pickle checkpoints + execution journal** in IndexedDB (not a full Pyodide snapshot). Optional **Pyright-class** diagnostics: `npm install monaco-pyright-lsp` and `VITE_ENABLE_PYRIGHT=true npm run dev`. See `docs/KERNEL_AND_INTELLISENSE.md`.
+Kernel state across reload uses **pickle checkpoints + execution journal** in IndexedDB (not a full Pyodide snapshot). Optional **Pyright-class** diagnostics: `npm install monaco-pyright-lsp` and `VITE_ENABLE_PYRIGHT=true npm run dev`. See `docs/KERNEL_AND_INTELLISENSE.md`. Notebook UX parity: `docs/NOTEBOOK_V7_PARITY.md`.
 
 ## Architecture documentation (Archify)
 
@@ -33,7 +33,7 @@ Grounded architecture lives in **`archify.md`** (regenerate with `npm run archif
 - **LAN HTTP:** Opening via `http://192.168.x.x:…` is a non-secure context; the app uses `randomId()` instead of `crypto.randomUUID()` so the workspace still mounts.
 - **Workspace persistence:** Notebooks imported via **Import** are stored in **IndexedDB** on the current browser origin (host + port). Use the same URL after restart (e.g. always `http://192.168.x.x:7502/...`, not switching between ports).
 - **Build:** `npm run build` → output in `dist/`
-- **Tests:** `npm test` (Node built-in test runner); `npm run check` for Svelte/TS
+- **Tests:** `npm test` (Node built-in test runner); `npm run check` for Svelte/TS; `npm run test:e2e` (Playwright smoke — uses `preview:e2e` on port **43174**, not dev port 4174)
 
 ### Agent behavior (required)
 

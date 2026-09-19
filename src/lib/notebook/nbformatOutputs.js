@@ -8,6 +8,9 @@
  * @property {string} text
  * @property {number} executionCount
  * @property {string[]} [figures]
+ * @property {string[]} [html]
+ * @property {string} [stdout]
+ * @property {string} [stderr]
  * @property {number} [startedAt]
  * @property {number} [finishedAt]
  * @property {number} [durationMs]
@@ -45,6 +48,12 @@ export function runSnapshotFromJupyterOutputs(outputs, executionCount = null) {
 	const chunks = [];
 	/** @type {string[]} */
 	const figures = [];
+	/** @type {string[]} */
+	const htmlParts = [];
+	/** @type {string[]} */
+	const stdoutParts = [];
+	/** @type {string[]} */
+	const stderrParts = [];
 	let ok = true;
 
 	for (const item of outputs) {
@@ -55,7 +64,11 @@ export function runSnapshotFromJupyterOutputs(outputs, executionCount = null) {
 		if (outputType === 'stream') {
 			const name = record.name === 'stderr' ? 'stderr' : 'stdout';
 			const text = normalizeMultiline(/** @type {string | string[]} */ (record.text));
-			if (text) chunks.push(name === 'stderr' ? text : text);
+			if (text) {
+				chunks.push(text);
+				if (name === 'stderr') stderrParts.push(text);
+				else stdoutParts.push(text);
+			}
 		} else if (outputType === 'error') {
 			ok = false;
 			const ename = String(record.ename ?? 'Error');
@@ -70,6 +83,9 @@ export function runSnapshotFromJupyterOutputs(outputs, executionCount = null) {
 				const mime = /** @type {Record<string, unknown>} */ (data);
 				if (typeof mime['image/png'] === 'string') {
 					figures.push(String(mime['image/png']));
+				}
+				if (typeof mime['text/html'] === 'string') {
+					htmlParts.push(String(mime['text/html']));
 				}
 				if (typeof mime['text/plain'] === 'string') {
 					chunks.push(normalizeMultiline(mime['text/plain']));
@@ -89,7 +105,10 @@ export function runSnapshotFromJupyterOutputs(outputs, executionCount = null) {
 		ok,
 		text: chunks.join('\n'),
 		executionCount: count,
-		figures
+		figures,
+		html: htmlParts.length ? htmlParts : undefined,
+		stdout: stdoutParts.join('\n') || undefined,
+		stderr: stderrParts.join('\n') || undefined
 	};
 }
 
@@ -103,14 +122,31 @@ export function jupyterOutputsFromRunSnapshot(snapshot) {
 	/** @type {Record<string, unknown>[]} */
 	const outputs = [];
 
-	if (snapshot.text) {
-		const name = snapshot.ok ? 'stdout' : 'stderr';
-		const lines = snapshot.text.split('\n');
-		const text = lines.map((line, index) => (index < lines.length - 1 ? `${line}\n` : line));
+	const outText = snapshot.stdout ?? (snapshot.ok ? snapshot.text : '');
+	const errText = snapshot.stderr ?? (!snapshot.ok ? snapshot.text : '');
+
+	if (outText) {
+		const lines = outText.split('\n');
 		outputs.push({
 			output_type: 'stream',
-			name,
-			text
+			name: 'stdout',
+			text: lines.map((line, index) => (index < lines.length - 1 ? `${line}\n` : line))
+		});
+	}
+	if (errText) {
+		const lines = errText.split('\n');
+		outputs.push({
+			output_type: 'stream',
+			name: 'stderr',
+			text: lines.map((line, index) => (index < lines.length - 1 ? `${line}\n` : line))
+		});
+	}
+
+	for (const html of snapshot.html ?? []) {
+		outputs.push({
+			output_type: 'display_data',
+			data: { 'text/html': html },
+			metadata: {}
 		});
 	}
 

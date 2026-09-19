@@ -26,7 +26,10 @@ export function cellOutputsFromNotebook(cells) {
 			startedAt: cell.lastRun.startedAt ?? 0,
 			finishedAt: cell.lastRun.finishedAt ?? 0,
 			durationMs: cell.lastRun.durationMs ?? 0,
-			figures: cell.lastRun.figures ?? []
+			figures: cell.lastRun.figures ?? [],
+			html: cell.lastRun.html ?? [],
+			stdout: cell.lastRun.stdout,
+			stderr: cell.lastRun.stderr
 		};
 	}
 	return map;
@@ -54,6 +57,9 @@ export function applyCellOutputsToNotebook(doc, outputs) {
 					text: run.text,
 					executionCount: run.executionCount,
 					figures: run.figures ?? [],
+					html: run.html,
+					stdout: run.stdout,
+					stderr: run.stderr,
 					startedAt: run.startedAt,
 					finishedAt: run.finishedAt,
 					durationMs: run.durationMs

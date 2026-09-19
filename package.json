@@ -12,8 +12,10 @@
     "start": "vite dev --host 0.0.0.0 --port 4174",
     "build": "vite build && touch dist/.nojekyll",
     "preview": "vite preview --host 0.0.0.0 --port 4174",
+    "preview:e2e": "vite preview --host 127.0.0.1 --port 43174",
     "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
     "test": "node --test",
+    "test:e2e": "playwright test",
     "archify:analyze": "archify-cli analyze .",
     "archify:generate": "archify-cli generate . --doc-type archify",
     "archify:write": "archify-cli write . --doc-type archify",
@@ -38,7 +40,8 @@
     "svelte-check": "^4.4.6",
     "typescript": "^6.0.2",
     "vite": "^8.0.7",
-    "archify-cli": "^0.1.3"
+    "archify-cli": "^0.1.3",
+    "@playwright/test": "^1.55.0"
   },
   "dependencies": {
     "@monaco-editor/loader": "^1.7.0"

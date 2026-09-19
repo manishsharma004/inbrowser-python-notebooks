@@ -815,3 +815,72 @@ body.nb-resize-active {
 	color: var(--ink-faint);
 	flex-shrink: 0;
 }
+
+.nb-html-output {
+	margin: 0.45rem 0 0;
+	padding: 0.55rem 0.75rem;
+	border: 1px solid var(--border);
+	background: var(--cell-bg);
+	font-size: 0.8125rem;
+	overflow: auto;
+}
+
+.nb-toc {
+	margin-bottom: 1.25rem;
+	padding: 0.75rem 1rem;
+	border: 1px solid var(--border);
+	background: var(--cell-bg);
+}
+
+.nb-toc__title {
+	margin: 0 0 0.5rem;
+	font-family: var(--font-mono);
+	font-size: 0.6875rem;
+	color: var(--ink-faint);
+	text-transform: uppercase;
+}
+
+.nb-toc ol {
+	margin: 0;
+	padding-left: 1.1rem;
+}
+
+.nb-toc button {
+	border: none;
+	background: none;
+	padding: 0.15rem 0;
+	font: inherit;
+	font-size: 0.8125rem;
+	color: var(--ink-dim);
+	text-align: left;
+}
+
+.nb-toc button:hover {
+	color: var(--run);
+}
+
+.nb-toc__level-3 {
+	margin-left: 0.75rem;
+}
+
+.nb-toc__level-4,
+.nb-toc__level-5,
+.nb-toc__level-6 {
+	margin-left: 1.25rem;
+}
+
+.nb-md-fold {
+	margin: 0.35rem 0;
+	padding: 0.25rem 0.5rem;
+	border-left: 2px solid var(--border-strong);
+}
+
+.nb-md-fold summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+
+.nb-editor--raw {
+	min-height: 4rem;
+	font-family: var(--font-mono);
+}

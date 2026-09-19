@@ -12,6 +12,7 @@ let databasePromise = null;
 
 export {
 	createNode,
+	ensureStarterDataFiles,
 	ensureStarterNotebook,
 	getNode,
 	listChildren,
