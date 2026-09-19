@@ -9,6 +9,7 @@ Client-only notebooks aligned with Jupyter Notebook v7 / try-jupyter **behavior*
 | **Kernel** | Dedicated **Web Worker** + Pyodide 0.29; **Interrupt** terminates worker; **Restart** resets worker |
 | **Packages** | Preload **numpy**, **matplotlib**, **scipy**, **pillow** in worker |
 | **VFS → kernel** | Workspace files (except `.ipynb.json`) sync to `/workspace/...` before each cell run |
+| **Filesystem UI** | Planned: JupyterLab-style browser — `docs/FILESYSTEM_JUPYTERLAB_PLAN.md` (today: flat root file list only) |
 | **Starter content** | `welcome.ipynb.json` tutorial + `data/iris.csv` on empty workspace |
 | **nbformat** | Import/export `.ipynb`: streams, PNG, HTML (stored), errors, `execution_count`, **raw** cells |
 | **Persisted outputs** | `lastRun` on code cells in `.ipynb.json` |
