@@ -1,5 +1,6 @@
 <script>
 	import { onDestroy, onMount } from 'svelte';
+	import { registerNotebookCellEditor } from '$lib/editor/notebookEditorRegistry.js';
 
 	/** @type {{
 	 *   cellId: string,
@@ -36,7 +37,6 @@
 		void (async () => {
 			if (!container) return;
 			const { createMonacoEditor } = await import('$lib/editor/monacoSetup.js');
-			const { registerNotebookCellEditor } = await import('$lib/editor/notebookEditorRegistry.js');
 			editorHandle = await createMonacoEditor(container, value, {
 				readOnly: disabled,
 				onChange: (next) => {
