@@ -3,6 +3,7 @@
 	import {
 		createNode,
 		ensureStarterNotebook,
+		ensureStarterDataFiles,
 		hasPersistedWorkspace,
 		listChildren,
 		loadSnapshot,
@@ -21,12 +22,16 @@
 		parseImportedNotebook,
 		toJupyterNotebook
 	} from '$lib/notebook/jupyterFormat.js';
+	import { tableOfContentsFromNotebook } from '$lib/notebook/tableOfContents.js';
+	import { sanitizeTrustedHtml } from '$lib/markdown/sanitizeHtml.js';
+	import { workspaceFilesForKernel } from '$lib/vfs/workspaceFilesForKernel.js';
 	import {
 		exportKernelCheckpoint,
 		importKernelCheckpoint,
 		inspectPythonCompletions,
 		inspectPythonSession,
 		isPythonRuntimeReady,
+		interruptPythonRun,
 		mergeKernelCheckpoint,
 		replayKernelJournal,
 		resetPythonRuntime,
@@ -46,6 +51,7 @@
 	import { syncNotebookCellsForAnalysis } from '$lib/editor/pyrightSync.js';
 	import MonacoCodeCell from '$lib/components/MonacoCodeCell.svelte';
 	import MarkdownCell from '$lib/components/MarkdownCell.svelte';
+	import RawCell from '$lib/components/RawCell.svelte';
 	import SessionPanel from '$lib/components/SessionPanel.svelte';
 	import { formatDuration, formatRunSummary, formatRunTimestamp } from '$lib/notebook/formatRunMeta.js';
 	import { randomId } from '$lib/utils/randomId.js';
@@ -68,6 +74,9 @@
 	 * @property {number} durationMs
 	 * @property {number} executionCount
 	 * @property {string[]} [figures]
+	 * @property {string[]} [html]
+	 * @property {string} [stdout]
+	 * @property {string} [stderr]
 	 */
 
 	/** @type {import('$lib/vfs/types.js').VfsSnapshot | null} */
@@ -97,6 +106,7 @@
 	let railTab = $state(/** @type {'files' | 'running'} */ ('files'));
 	let runningCellId = $state(/** @type {string | null} */ (null));
 	let kernelRestarting = $state(false);
+	let showToc = $state(false);
 
 	const LAST_OPEN_FILE_KEY = 'nb-last-open-file-v1';
 
@@ -235,6 +245,8 @@
 			const loaded = await loadSnapshot();
 			const nodeCountBefore = loaded.nodes.length;
 			const starter = ensureStarterNotebook(loaded);
+			ensureStarterDataFiles(loaded);
+			await saveSnapshot(loaded);
 			const createdStarter = loaded.nodes.length > nodeCountBefore;
 			if (createdStarter || !hadPersisted) {
 				await saveSnapshot(loaded);
@@ -259,6 +271,8 @@
 			const empty = emptySnapshot();
 			snapshot = bumpSnapshot(empty);
 			const starter = ensureStarterNotebook(empty);
+			ensureStarterDataFiles(empty);
+			await saveSnapshot(empty);
 			if (starter) {
 				await selectFile(starter.id, starter.content ?? '');
 			}
@@ -470,21 +484,19 @@
 		pyodideStatus = 'loading';
 		const startedAt = Date.now();
 		const timerStart = performance.now();
-		const result = await runPythonSource(cell.source);
+		const result = await runPythonSource(
+			cell.source,
+			snapshot ? workspaceFilesForKernel(snapshot) : {}
+		);
 		const durationMs = performance.now() - timerStart;
 		const finishedAt = Date.now();
 		pyodideStatus = 'ready';
 		running = false;
 		runningCellId = null;
 
-		const chunks = [];
-		if (result.stdout) chunks.push(result.stdout);
-		if (result.stderr) chunks.push(result.stderr);
-		if (result.error) chunks.push(result.error);
-
 		const previousCount = cellOutputs[cellId]?.executionCount ?? 0;
 		const textOutput =
-			chunks.join('\n') ||
+			[result.stdout, result.stderr, result.error].filter(Boolean).join('\n') ||
 			(result.ok && (result.figures?.length ?? 0) > 0 ? '' : result.ok ? '—' : 'Execution failed.');
 
 		cellOutputs = {
@@ -492,6 +504,9 @@
 			[cellId]: {
 				ok: result.ok,
 				text: textOutput,
+				stdout: result.stdout,
+				stderr: result.stderr,
+				html: [],
 				figures: result.figures ?? [],
 				startedAt,
 				finishedAt,
@@ -523,7 +538,7 @@
 	}
 
 	/**
-	 * @param {'code' | 'markdown'} kind
+	 * @param {'code' | 'markdown' | 'raw'} kind
 	 * @param {number} [afterIndex]
 	 */
 	async function addCell(kind, afterIndex = notebook ? notebook.cells.length - 1 : 0) {
@@ -531,10 +546,45 @@
 		const cell = {
 			id: randomId(),
 			kind,
-			source: kind === 'markdown' ? '## Notes\n\n' : ''
+			source:
+				kind === 'markdown'
+					? '## Notes\n\n'
+					: kind === 'raw'
+						? ''
+						: ''
 		};
 		const insertAt = Math.min(Math.max(afterIndex, -1) + 1, notebook.cells.length);
 		notebook.cells.splice(insertAt, 0, cell);
+		notebook = { ...notebook, cells: [...notebook.cells] };
+		await persistNotebook();
+	}
+
+	async function runAllCells() {
+		if (!notebook || running) return;
+		for (const cell of notebook.cells) {
+			if (cell.kind !== 'code') continue;
+			await runCell(cell.id);
+		}
+	}
+
+	async function interruptKernel() {
+		interruptPythonRun();
+		running = false;
+		runningCellId = null;
+		pyodideStatus = 'idle';
+	}
+
+	/** @param {number} index */
+	async function duplicateCell(index) {
+		if (!notebook) return;
+		const src = notebook.cells[index];
+		const copy = {
+			id: randomId(),
+			kind: src.kind,
+			source: src.source,
+			...(src.metadata ? { metadata: { ...src.metadata } } : {})
+		};
+		notebook.cells.splice(index + 1, 0, copy);
 		notebook = { ...notebook, cells: [...notebook.cells] };
 		await persistNotebook();
 	}
@@ -660,6 +710,10 @@
 		const index = notebook.cells.findIndex((c) => c.id === runningCellId);
 		return index >= 0 ? `Cell ${index + 1}` : null;
 	});
+
+	const tocEntries = $derived.by(() =>
+		notebook ? tableOfContentsFromNotebook(notebook.cells) : []
+	);
 </script>
 
 <input
@@ -682,6 +736,11 @@
 			<div class="nb-topbar__actions">
 				<button type="button" class="nb-chip" onclick={() => addCell('code')}>+ Code</button>
 				<button type="button" class="nb-chip" onclick={() => addCell('markdown')}>+ Markdown</button>
+				<button type="button" class="nb-chip" onclick={() => addCell('raw')}>+ Raw</button>
+				<button type="button" class="nb-chip" onclick={() => runAllCells()} disabled={running}>Run all</button>
+				<button type="button" class="nb-chip" onclick={() => interruptKernel()} disabled={!running}>
+					Interrupt
+				</button>
 				<button type="button" class="nb-chip" onclick={triggerImport}>Import</button>
 				<button type="button" class="nb-chip" onclick={exportNotebookJson}>Export JSON</button>
 				<button type="button" class="nb-chip" onclick={exportNotebookJupyter}>Export .ipynb</button>
@@ -690,6 +749,14 @@
 				</button>
 				<button type="button" class="nb-chip" onclick={() => toggleFullWidth()}>
 					{fullWidthNotebook ? 'Standard width' : 'Full width'}
+				</button>
+				<button
+					type="button"
+					class="nb-chip"
+					class:nb-chip--active={showToc}
+					onclick={() => (showToc = !showToc)}
+				>
+					Contents
 				</button>
 			</div>
 			<div class="nb-kernel" title="Pyodide WebAssembly kernel in this tab">
@@ -818,6 +885,26 @@
 					</div>
 				{/if}
 				<div class="nb-canvas__inner" class:nb-canvas__inner--full={fullWidthNotebook}>
+					{#if showToc && tocEntries.length > 0}
+						<nav class="nb-toc" aria-label="Table of contents">
+							<p class="nb-toc__title">Contents</p>
+							<ol>
+								{#each tocEntries as entry (entry.cellId + entry.title)}
+									<li class="nb-toc__level-{entry.level}">
+										<button
+											type="button"
+											onclick={() =>
+												document
+													.getElementById(`nb-cell-${entry.cellId}`)
+													?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+										>
+											{entry.title}
+										</button>
+									</li>
+								{/each}
+							</ol>
+						</nav>
+					{/if}
 					{#each notebook.cells as cell, i (cell.id)}
 						<article class="nb-cell" id="nb-cell-{cell.id}">
 							<div class="nb-cell__gutter">
@@ -850,6 +937,7 @@
 									<div class="nb-cell-toolbar__actions">
 										<button type="button" class="nb-chip" onclick={() => addCell('code', i)}>+ code</button>
 										<button type="button" class="nb-chip" onclick={() => addCell('markdown', i)}>+ md</button>
+										<button type="button" class="nb-chip" onclick={() => duplicateCell(i)}>Duplicate</button>
 										<button type="button" class="nb-chip" onclick={() => moveCell(i, -1)} disabled={i === 0}>↑</button>
 										<button
 											type="button"
@@ -870,6 +958,12 @@
 									<MarkdownCell
 										bind:value={cell.source}
 										label="Markdown cell {i + 1}"
+										onchange={persistNotebook}
+									/>
+								{:else if cell.kind === 'raw'}
+									<RawCell
+										bind:value={cell.source}
+										label="Raw cell {i + 1}"
 										onchange={persistNotebook}
 									/>
 								{:else}
@@ -899,6 +993,13 @@
 													/>
 												{/each}
 											</div>
+										{/if}
+										{#if notebookTrusted && cellOutputs[cell.id].html?.length}
+											{#each cellOutputs[cell.id].html as fragment, hi (hi)}
+												<div class="nb-html-output">
+													{@html sanitizeTrustedHtml(fragment)}
+												</div>
+											{/each}
 										{/if}
 										{#if cellOutputs[cell.id].text}
 											<pre

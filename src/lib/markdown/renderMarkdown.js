@@ -1,9 +1,10 @@
 /**
- * Minimal markdown → HTML (headings, emphasis, code, links, lists). No raw HTML pass-through.
+ * Minimal markdown → HTML (headings, emphasis, code, links, lists).
  * @param {string} source
+ * @param {{ collapsibleHeadings?: boolean }} [options]
  * @returns {string}
  */
-export function renderMarkdown(source) {
+export function renderMarkdown(source, options = {}) {
 	const escaped = source
 		.replace(/&/g, '&amp;')
 		.replace(/</g, '&lt;')
@@ -35,7 +36,26 @@ export function renderMarkdown(source) {
 		.filter(Boolean)
 		.join('\n');
 
-	return html || '<p class="nb-md-empty">Empty markdown cell.</p>';
+	const body = html || '<p class="nb-md-empty">Empty markdown cell.</p>';
+	if (options.collapsibleHeadings === false) return body;
+	return wrapCollapsibleSections(body);
+}
+
+/**
+ * @param {string} html
+ */
+function wrapCollapsibleSections(html) {
+	const parts = html.split(/(?=<h2>)/);
+	if (parts.length <= 1) return html;
+	return parts
+		.map((part, index) => {
+			if (index === 0 && !part.startsWith('<h2>')) return part;
+			const titleMatch = /^<h2>([\s\S]*?)<\/h2>/.exec(part);
+			if (!titleMatch) return part;
+			const rest = part.slice(titleMatch[0].length);
+			return `<details class="nb-md-fold" open><summary>${titleMatch[1]}</summary>${rest}</details>`;
+		})
+		.join('');
 }
 
 /**

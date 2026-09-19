@@ -1,3 +1,4 @@
+import { buildStarterNotebookJson, STARTER_IRIS_CSV } from '../notebook/starterNotebook.js';
 import { randomId } from '../utils/randomId.js';
 
 /**
@@ -105,19 +106,21 @@ export function ensureStarterNotebook(snapshot) {
 		snapshot.rootId,
 		'welcome.ipynb.json',
 		'file',
-		JSON.stringify(
-			{
-				version: 1,
-				cells: [
-					{
-						id: randomId(),
-						kind: 'code',
-						source: 'print("Hello from Pyodide in your browser!")\n'
-					}
-				]
-			},
-			null,
-			2
-		)
+		buildStarterNotebookJson()
 	);
+}
+
+/**
+ * @param {import('./types.js').VfsSnapshot} snapshot
+ */
+export function ensureStarterDataFiles(snapshot) {
+	const children = listChildren(snapshot, snapshot.rootId);
+	const hasIris = children.some((n) => n.type === 'file' && n.name === 'data/iris.csv');
+	if (!hasIris) {
+		let dataDir = children.find((n) => n.type === 'directory' && n.name === 'data');
+		if (!dataDir) {
+			dataDir = createNode(snapshot, snapshot.rootId, 'data', 'directory');
+		}
+		createNode(snapshot, dataDir.id, 'iris.csv', 'file', STARTER_IRIS_CSV);
+	}
 }

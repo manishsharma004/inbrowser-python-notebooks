@@ -41,10 +41,15 @@ export function fromJupyterNotebook(raw, options = {}) {
 	const mapped = cells
 		.map((cell) => {
 			const cellType = String(cell.cell_type ?? '');
-			if (cellType !== 'markdown' && cellType !== 'code') {
+			if (cellType !== 'markdown' && cellType !== 'code' && cellType !== 'raw') {
 				return null;
 			}
-			const kind = cellType === 'markdown' ? /** @type {'markdown'} */ ('markdown') : /** @type {'code'} */ ('code');
+			const kind =
+				cellType === 'markdown'
+					? /** @type {'markdown'} */ ('markdown')
+					: cellType === 'raw'
+						? /** @type {'raw'} */ ('raw')
+						: /** @type {'code'} */ ('code');
 			/** @type {import('./parseNotebook.js').NotebookCell} */
 			const mappedCell = {
 				id: createId(),
@@ -115,8 +120,10 @@ export function toJupyterNotebook(doc) {
 		cells: doc.cells.map((cell) => {
 			const cellMetadata =
 				cell.metadata?.scrolled !== undefined ? { scrolled: cell.metadata.scrolled } : {};
+			const cell_type =
+				cell.kind === 'markdown' ? 'markdown' : cell.kind === 'raw' ? 'raw' : 'code';
 			const base = {
-				cell_type: cell.kind === 'markdown' ? 'markdown' : 'code',
+				cell_type,
 				metadata: cellMetadata,
 				source: toJupyterSourceLines(cell.source)
 			};

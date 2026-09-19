@@ -1,5 +1,5 @@
-/** Pyodide wheels loaded for every notebook kernel (see runtime.js). */
-export const NOTEBOOK_PRELOAD_PACKAGES = ['numpy', 'matplotlib'];
+/** Pyodide wheels loaded for every notebook kernel (see pyodide-kernel.worker.js). */
+export const NOTEBOOK_PRELOAD_PACKAGES = ['numpy', 'matplotlib', 'scipy', 'pillow'];
 
 /**
  * Inline figures: Agg backend + patched plt.show() → PNG queue drained after each cell.

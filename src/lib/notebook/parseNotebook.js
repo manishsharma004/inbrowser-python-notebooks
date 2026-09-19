@@ -10,7 +10,7 @@
 /**
  * @typedef {Object} NotebookCell
  * @property {string} id
- * @property {'code' | 'markdown'} kind
+ * @property {'code' | 'markdown' | 'raw'} kind
  * @property {string} source
  * @property {NotebookCellMetadata} [metadata]
  * @property {CellRunSnapshot} [lastRun]
@@ -55,6 +55,9 @@ function parseLastRun(value) {
 		figures: Array.isArray(record.figures)
 			? record.figures.filter((f) => typeof f === 'string')
 			: [],
+		html: Array.isArray(record.html) ? record.html.filter((h) => typeof h === 'string') : undefined,
+		stdout: typeof record.stdout === 'string' ? record.stdout : undefined,
+		stderr: typeof record.stderr === 'string' ? record.stderr : undefined,
 		startedAt: typeof record.startedAt === 'number' ? record.startedAt : undefined,
 		finishedAt: typeof record.finishedAt === 'number' ? record.finishedAt : undefined,
 		durationMs: typeof record.durationMs === 'number' ? record.durationMs : undefined
@@ -92,7 +95,12 @@ export function parseNotebook(raw) {
 				const cellMeta = parseCellMetadata(c.metadata);
 				return {
 					id: typeof c.id === 'string' ? c.id : `cell-${index}`,
-					kind: c.kind === 'markdown' ? 'markdown' : 'code',
+					kind:
+					c.kind === 'markdown'
+						? 'markdown'
+						: c.kind === 'raw'
+							? 'raw'
+							: 'code',
 					source: typeof c.source === 'string' ? c.source : '',
 					...(cellMeta ? { metadata: cellMeta } : {}),
 					...(lastRun ? { lastRun } : {})
