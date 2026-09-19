@@ -1,3 +1,5 @@
+@import url('https://cdn.jsdelivr.net/npm/@vscode/codicons@0.0.36/dist/codicon.css');
+
 :root {
 	--bg: #0f0e0c;
 	--bg-elevated: #141311;
@@ -972,6 +974,71 @@ body.nb-resize-active {
 .nb-kernel-picker {
 	font-size: 0.8125rem;
 	white-space: nowrap;
+}
+
+.nb-kernel-menu {
+	position: relative;
+}
+
+.nb-kernel-menu summary {
+	list-style: none;
+	cursor: pointer;
+	font-family: var(--font-mono);
+	color: var(--ink-dim);
+}
+
+.nb-kernel-menu summary::-webkit-details-marker {
+	display: none;
+}
+
+.nb-kernel-menu__panel {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 30;
+	min-width: 11rem;
+	padding: 0.35rem;
+	border: 1px solid var(--border-strong);
+	border-radius: 4px;
+	background: var(--bg-elevated);
+	box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+}
+
+.nb-kernel-menu__panel button {
+	text-align: left;
+	padding: 0.35rem 0.5rem;
+	border: none;
+	border-radius: 2px;
+	background: transparent;
+	font-size: 0.8125rem;
+}
+
+.nb-kernel-menu__panel button:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--focus-ring) 12%, var(--cell-bg));
+}
+
+.nb-cell-insert__btn .codicon {
+	font-size: 0.85rem;
+	margin-right: 0.15rem;
+	vertical-align: -2px;
+}
+
+.nb-icon-btn .codicon {
+	font-size: 1rem;
+	line-height: 1;
+}
+
+.nb-cell-frame--collapsed .nb-cell-frame__chevron-icon {
+	transform: rotate(-90deg);
+	display: inline-block;
+}
+
+.nb-cell-frame__chevron-icon {
+	transition: transform 0.12s ease;
+	display: inline-block;
 }
 
 .nb-cell-stack {

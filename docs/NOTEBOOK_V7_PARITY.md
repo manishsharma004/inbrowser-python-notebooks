@@ -15,6 +15,7 @@ Client-only notebooks aligned with Jupyter Notebook v7 / try-jupyter **behavior*
 | **Kernel UI** | Cold / busy / idle / restarting; **Running** rail tab |
 | **Notebook UI** | Trust banner, trusted **HTML** outputs, full width, **Outline**, collapsible **h2** sections |
 | **Cell chrome** | VS Code–style focus ring, hover **+ Code / + Markdown** inserts, in-cell run toolbar, collapse, **Python** badge |
+| **Keymap** | Jupyter-style command keys when not typing: **A/B** insert, **M/Y** cell type, **C/V** copy/paste, **DD** delete; Monaco: Ctrl/Shift/Alt+Enter |
 | **Cell ops** | Raw cells, duplicate, run all, clear outputs, run/advance shortcuts |
 | **Output UX** | Scrolled long text (~100 lines), inline matplotlib PNG |
 | **Tests** | Node unit tests + Playwright smoke (`npm run test:e2e`) |

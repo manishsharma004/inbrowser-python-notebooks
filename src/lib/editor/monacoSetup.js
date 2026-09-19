@@ -324,6 +324,7 @@ export async function ensureMonacoReady() {
  *   onChange?: (value: string) => void,
  *   onRunCell?: () => void,
  *   onRunCellAdvance?: () => void,
+ *   onRunCellAndInsertBelow?: () => void,
  *   onFocus?: () => void
  * }} options
  */
@@ -395,6 +396,13 @@ export async function createMonacoEditor(container, initialValue, options = {}) 
 		label: 'Run Cell and Select Next',
 		keybindings: [monaco.KeyMod.Shift | monaco.KeyCode.Enter],
 		run: () => (options.onRunCellAdvance ?? options.onRunCell)?.()
+	});
+
+	editor.addAction({
+		id: 'notebook.runCellAndInsertBelow',
+		label: 'Run Cell and Insert Below',
+		keybindings: [monaco.KeyMod.Alt | monaco.KeyCode.Enter],
+		run: () => (options.onRunCellAndInsertBelow ?? options.onRunCellAdvance ?? options.onRunCell)?.()
 	});
 
 	if (import.meta.env.VITE_ENABLE_PYRIGHT === 'true') {

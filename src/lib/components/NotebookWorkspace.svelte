@@ -54,6 +54,9 @@
 	import RawCell from '$lib/components/RawCell.svelte';
 	import SessionPanel from '$lib/components/SessionPanel.svelte';
 	import NotebookCellChrome from '$lib/components/NotebookCellChrome.svelte';
+	import { attachNotebookKeymap } from '$lib/notebook/notebookKeymap.js';
+	import { cellIndexById, nextCellId, prevCellId } from '$lib/notebook/notebookCellNavigation.js';
+	import { focusNotebookCellEditor } from '$lib/editor/notebookEditorRegistry.js';
 	import { formatDuration, formatRunTimestamp } from '$lib/notebook/formatRunMeta.js';
 	import { randomId } from '$lib/utils/randomId.js';
 	import {
@@ -114,6 +117,8 @@
 	/** @type {Record<string, 'edit' | 'preview'>} */
 	let markdownModes = $state({});
 	let showNotebookMenu = $state(false);
+	/** @type {{ kind: 'code' | 'markdown' | 'raw', source: string, metadata?: Record<string, unknown> } | null} */
+	let cellClipboard = $state(null);
 
 	const LAST_OPEN_FILE_KEY = 'nb-last-open-file-v1';
 
@@ -201,6 +206,9 @@
 		}
 		if (notebook) {
 			syncNotebookCellsForAnalysis(fileId, notebook.cells);
+			if (!activeCellId && notebook.cells[0]) {
+				activeCellId = notebook.cells[0].id;
+			}
 		}
 	}
 
@@ -284,6 +292,47 @@
 				await selectFile(starter.id, starter.content ?? '');
 			}
 		}
+	});
+
+	onMount(() => {
+		return attachNotebookKeymap({
+			insertAbove: (kind = 'code') => {
+				const index = activeCellIndex();
+				if (!notebook?.cells.length) return;
+				if (index < 0) void addCell(kind, -1);
+				else void addCell(kind, index - 1);
+			},
+			insertBelow: (kind = 'code') => {
+				const index = activeCellIndex();
+				if (!notebook?.cells.length) return;
+				if (index < 0) void addCell(kind, notebook.cells.length - 1);
+				else void addCell(kind, index);
+			},
+			deleteCell: () => {
+				const index = activeCellIndex();
+				if (index >= 0) void deleteCell(index);
+			},
+			toMarkdown: () => {
+				const index = activeCellIndex();
+				if (index >= 0) void changeCellKind(index, 'markdown');
+			},
+			toCode: () => {
+				const index = activeCellIndex();
+				if (index >= 0) void changeCellKind(index, 'code');
+			},
+			focusPrev: () => {
+				if (!notebook || !activeCellId) return;
+				const prev = prevCellId(notebook.cells, activeCellId);
+				if (prev) focusCell(prev);
+			},
+			focusNext: () => {
+				if (!notebook || !activeCellId) return;
+				const next = nextCellId(notebook.cells, activeCellId);
+				if (next) focusCell(next);
+			},
+			copyCell: copyActiveCell,
+			pasteBelow: () => void pasteCellBelowActive()
+		});
 	});
 
 	async function persistNotebook() {
@@ -536,12 +585,8 @@
 	async function runCellAndAdvance(cellId) {
 		await runCell(cellId);
 		if (!notebook) return;
-		const index = notebook.cells.findIndex((c) => c.id === cellId);
-		for (let j = index + 1; j < notebook.cells.length; j++) {
-			const next = notebook.cells[j];
-			document.getElementById(`nb-cell-${next.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-			break;
-		}
+		const next = nextCellId(notebook.cells, cellId);
+		if (next) focusCell(next);
 	}
 
 	/**
@@ -619,6 +664,105 @@
 		cells.splice(target, 0, item);
 		notebook = { ...notebook, cells };
 		await persistNotebook();
+	}
+
+	function activeCellIndex() {
+		if (!notebook || !activeCellId) return -1;
+		return cellIndexById(notebook.cells, activeCellId);
+	}
+
+	/** @param {string} cellId */
+	function focusCell(cellId) {
+		activeCellId = cellId;
+		document.getElementById(`nb-cell-${cellId}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		requestAnimationFrame(() => focusNotebookCellEditor(cellId));
+	}
+
+	/** @param {string} cellId */
+	async function clearCellOutput(cellId) {
+		if (!cellOutputs[cellId]) return;
+		const { [cellId]: _, ...rest } = cellOutputs;
+		cellOutputs = rest;
+		if (notebook) {
+			notebook = applyCellOutputsToNotebook(notebook, cellOutputs);
+			await persistNotebook();
+		}
+	}
+
+	/**
+	 * @param {number} index
+	 * @param {'code' | 'markdown' | 'raw'} kind
+	 */
+	async function changeCellKind(index, kind) {
+		if (!notebook) return;
+		const cell = notebook.cells[index];
+		if (!cell || cell.kind === kind) return;
+		notebook.cells[index] = { ...cell, kind };
+		notebook = { ...notebook, cells: [...notebook.cells] };
+		if (kind === 'markdown') {
+			setMarkdownMode(cell.id, 'preview');
+		}
+		await persistNotebook();
+	}
+
+	/** @param {string} cellId */
+	async function runCellAndInsertBelow(cellId) {
+		const index = cellIndexById(notebook?.cells ?? [], cellId);
+		await runCell(cellId);
+		if (!notebook || index < 0) return;
+		await addCell('code', index);
+		const inserted = notebook.cells[index + 1];
+		if (inserted) focusCell(inserted.id);
+	}
+
+	/** @param {string} cellId */
+	async function runCellAndAllBelow(cellId) {
+		if (!notebook || running) return;
+		const start = cellIndexById(notebook.cells, cellId);
+		if (start < 0) return;
+		for (let i = start; i < notebook.cells.length; i++) {
+			const cell = notebook.cells[i];
+			if (cell.kind === 'code') await runCell(cell.id);
+		}
+	}
+
+	/** @param {string} cellId */
+	async function runNextCodeCellBelow(cellId) {
+		if (!notebook || running) return;
+		const index = cellIndexById(notebook.cells, cellId);
+		for (let i = index + 1; i < notebook.cells.length; i++) {
+			const cell = notebook.cells[i];
+			if (cell.kind === 'code') {
+				await runCell(cell.id);
+				return;
+			}
+		}
+	}
+
+	function copyActiveCell() {
+		const index = activeCellIndex();
+		if (!notebook || index < 0) return;
+		const cell = notebook.cells[index];
+		cellClipboard = {
+			kind: cell.kind,
+			source: cell.source,
+			...(cell.metadata ? { metadata: { ...cell.metadata } } : {})
+		};
+	}
+
+	async function pasteCellBelowActive() {
+		const index = activeCellIndex();
+		if (!notebook || index < 0 || !cellClipboard) return;
+		const cell = {
+			id: randomId(),
+			kind: cellClipboard.kind,
+			source: cellClipboard.source,
+			...(cellClipboard.metadata ? { metadata: { ...cellClipboard.metadata } } : {})
+		};
+		notebook.cells.splice(index + 1, 0, cell);
+		notebook = { ...notebook, cells: [...notebook.cells] };
+		await persistNotebook();
+		focusCell(cell.id);
 	}
 
 	async function addNotebook() {
@@ -786,7 +930,13 @@
 			</div>
 			<div class="nb-kernel nb-kernel-picker" title="In-browser Pyodide kernel (WebAssembly)">
 				<span class={kernelDotClass} aria-hidden="true"></span>
-				<span>{kernelLabel}</span>
+				<details class="nb-kernel-menu">
+					<summary>{kernelLabel}</summary>
+					<div class="nb-kernel-menu__panel">
+						<button type="button" disabled={running} onclick={() => restartKernel()}>Restart kernel</button>
+						<button type="button" disabled={!running} onclick={() => interruptKernel()}>Interrupt</button>
+					</div>
+				</details>
 			</div>
 		</header>
 
@@ -946,6 +1096,11 @@
 								ontogglecollapse={() => toggleCellCollapsed(cell.id)}
 								onrun={() => runCell(cell.id)}
 								onrunadvance={() => runCellAndAdvance(cell.id)}
+								onrunbelow={() => runNextCodeCellBelow(cell.id)}
+								onclearoutput={() => clearCellOutput(cell.id)}
+								onchangecode={() => changeCellKind(i, 'code')}
+								onchangemarkdown={() => changeCellKind(i, 'markdown')}
+								onrunallbelow={() => runCellAndAllBelow(cell.id)}
 								ondelete={() => deleteCell(i)}
 								onduplicate={() => duplicateCell(i)}
 								onmoveup={() => moveCell(i, -1)}
@@ -970,12 +1125,14 @@
 										/>
 									{:else}
 										<MonacoCodeCell
+											cellId={cell.id}
 											bind:value={cell.source}
 											disabled={running}
 											label="Code cell {i + 1}"
 											onchange={persistNotebook}
 											onrun={() => runCell(cell.id)}
 											onrunadvance={() => runCellAndAdvance(cell.id)}
+											onruninsertbelow={() => runCellAndInsertBelow(cell.id)}
 											onfocus={() => (activeCellId = cell.id)}
 										/>
 										{#if cellOutputs[cell.id]}
