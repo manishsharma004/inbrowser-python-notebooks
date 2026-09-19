@@ -6,14 +6,16 @@
 	 *   disabled?: boolean,
 	 *   label?: string,
 	 *   onchange?: (value: string) => void,
-	 *   onrun?: () => void
+	 *   onrun?: () => void,
+	 *   onrunadvance?: () => void
 	 * }} */
 	let {
 		value = $bindable(''),
 		disabled = false,
 		label = 'Code cell',
 		onchange,
-		onrun
+		onrun,
+		onrunadvance
 	} = $props();
 
 	/** @type {HTMLDivElement | undefined} */
@@ -32,7 +34,8 @@
 				value = next;
 				onchange?.(next);
 			},
-			onRunCell: () => onrun?.()
+			onRunCell: () => onrun?.(),
+			onRunCellAdvance: () => (onrunadvance ?? onrun)?.()
 		});
 	});
 

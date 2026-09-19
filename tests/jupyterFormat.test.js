@@ -31,13 +31,26 @@ test('fromJupyterNotebook maps markdown and code cells', () => {
 test('toJupyterNotebook round-trip shape', () => {
 	const doc = {
 		version: 1,
-		cells: [{ id: 'a', kind: /** @type {'code'} */ ('code'), source: 'x = 1\n' }]
+		cells: [
+			{
+				id: 'a',
+				kind: /** @type {'code'} */ ('code'),
+				source: 'x = 1\n',
+				lastRun: { ok: true, text: '1\n', executionCount: 1, figures: [] }
+			}
+		]
 	};
 	const jupyter = toJupyterNotebook(doc);
 	assert.equal(jupyter.nbformat, 4);
 	assert.equal(isJupyterNotebook(jupyter), true);
+	const cells = /** @type {{ outputs: unknown[]; execution_count: number | null }[]} */ (
+		jupyter.cells
+	);
+	assert.equal(cells[0].execution_count, 1);
+	assert.ok(cells[0].outputs.length >= 1);
 	const raw = JSON.stringify(jupyter);
 	const imported = parseImportedNotebook(raw);
 	assert.ok(imported);
 	assert.equal(imported?.cells[0].source, 'x = 1\n');
+	assert.equal(imported?.cells[0].lastRun?.executionCount, 1);
 });
