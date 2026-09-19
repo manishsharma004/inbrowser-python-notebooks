@@ -53,7 +53,8 @@
 	import MarkdownCell from '$lib/components/MarkdownCell.svelte';
 	import RawCell from '$lib/components/RawCell.svelte';
 	import SessionPanel from '$lib/components/SessionPanel.svelte';
-	import { formatDuration, formatRunSummary, formatRunTimestamp } from '$lib/notebook/formatRunMeta.js';
+	import NotebookCellChrome from '$lib/components/NotebookCellChrome.svelte';
+	import { formatDuration, formatRunTimestamp } from '$lib/notebook/formatRunMeta.js';
 	import { randomId } from '$lib/utils/randomId.js';
 	import {
 		clampPanelWidth,
@@ -107,6 +108,12 @@
 	let runningCellId = $state(/** @type {string | null} */ (null));
 	let kernelRestarting = $state(false);
 	let showToc = $state(false);
+	let activeCellId = $state(/** @type {string | null} */ (null));
+	/** @type {Record<string, boolean>} */
+	let collapsedCells = $state({});
+	/** @type {Record<string, 'edit' | 'preview'>} */
+	let markdownModes = $state({});
+	let showNotebookMenu = $state(false);
 
 	const LAST_OPEN_FILE_KEY = 'nb-last-open-file-v1';
 
@@ -689,10 +696,11 @@
 	const otherSessionSources = $derived.by(() => files.filter((file) => file.id !== activeFileId));
 
 	const kernelLabel = $derived.by(() => {
-		if (kernelRestarting) return 'Kernel · restarting';
-		if (running || pyodideStatus === 'loading') return 'Kernel · busy';
-		if (pyodideStatus === 'ready') return 'Kernel · idle';
-		return 'Kernel · cold';
+		if (kernelRestarting) return 'Restarting kernel…';
+		if (pyodideStatus === 'loading') return 'Starting kernel…';
+		if (running) return 'Kernel busy…';
+		if (pyodideStatus === 'ready') return 'Python · Pyodide';
+		return 'Python · Pyodide (cold)';
 	});
 
 	const kernelDotClass = $derived.by(() => {
@@ -710,6 +718,16 @@
 		const index = notebook.cells.findIndex((c) => c.id === runningCellId);
 		return index >= 0 ? `Cell ${index + 1}` : null;
 	});
+
+	/** @param {string} cellId @param {'edit' | 'preview'} mode */
+	function setMarkdownMode(cellId, mode) {
+		markdownModes = { ...markdownModes, [cellId]: mode };
+	}
+
+	/** @param {string} cellId */
+	function toggleCellCollapsed(cellId) {
+		collapsedCells = { ...collapsedCells, [cellId]: !collapsedCells[cellId] };
+	}
 
 	const tocEntries = $derived.by(() =>
 		notebook ? tableOfContentsFromNotebook(notebook.cells) : []
@@ -733,33 +751,40 @@
 				<span class="nb-topbar__title">{activeName}</span>
 				<span class="nb-topbar__path">~/workspace</span>
 			</div>
-			<div class="nb-topbar__actions">
-				<button type="button" class="nb-chip" onclick={() => addCell('code')}>+ Code</button>
-				<button type="button" class="nb-chip" onclick={() => addCell('markdown')}>+ Markdown</button>
-				<button type="button" class="nb-chip" onclick={() => addCell('raw')}>+ Raw</button>
-				<button type="button" class="nb-chip" onclick={() => runAllCells()} disabled={running}>Run all</button>
-				<button type="button" class="nb-chip" onclick={() => interruptKernel()} disabled={!running}>
-					Interrupt
-				</button>
-				<button type="button" class="nb-chip" onclick={triggerImport}>Import</button>
-				<button type="button" class="nb-chip" onclick={exportNotebookJson}>Export JSON</button>
-				<button type="button" class="nb-chip" onclick={exportNotebookJupyter}>Export .ipynb</button>
-				<button type="button" class="nb-chip" onclick={() => clearAllOutputs()} disabled={running}>
-					Clear outputs
-				</button>
-				<button type="button" class="nb-chip" onclick={() => toggleFullWidth()}>
-					{fullWidthNotebook ? 'Standard width' : 'Full width'}
-				</button>
-				<button
-					type="button"
-					class="nb-chip"
-					class:nb-chip--active={showToc}
-					onclick={() => (showToc = !showToc)}
-				>
-					Contents
-				</button>
+			<div class="nb-topbar__actions nb-notebook-toolbar">
+				<div class="nb-notebook-toolbar__primary">
+					<button type="button" class="nb-toolbar-btn" onclick={() => addCell('code')}>+ Code</button>
+					<button type="button" class="nb-toolbar-btn" onclick={() => addCell('markdown')}>+ Markdown</button>
+					<button type="button" class="nb-toolbar-btn" onclick={() => runAllCells()} disabled={running}>
+						Run All
+					</button>
+					<button type="button" class="nb-toolbar-btn" onclick={() => clearAllOutputs()} disabled={running}>
+						Clear All Outputs
+					</button>
+					<button
+						type="button"
+						class="nb-toolbar-btn"
+						class:nb-toolbar-btn--active={showToc}
+						onclick={() => (showToc = !showToc)}
+					>
+						Outline
+					</button>
+				</div>
+				<details class="nb-notebook-menu" bind:open={showNotebookMenu}>
+					<summary class="nb-toolbar-btn nb-notebook-menu__trigger">⋯</summary>
+					<div class="nb-notebook-menu__panel">
+						<button type="button" onclick={() => addCell('raw')}>+ Raw cell</button>
+						<button type="button" onclick={() => interruptKernel()} disabled={!running}>Interrupt</button>
+						<button type="button" onclick={triggerImport}>Import .ipynb</button>
+						<button type="button" onclick={exportNotebookJson}>Export JSON</button>
+						<button type="button" onclick={exportNotebookJupyter}>Export .ipynb</button>
+						<button type="button" onclick={() => toggleFullWidth()}>
+							{fullWidthNotebook ? 'Standard width' : 'Full width'}
+						</button>
+					</div>
+				</details>
 			</div>
-			<div class="nb-kernel" title="Pyodide WebAssembly kernel in this tab">
+			<div class="nb-kernel nb-kernel-picker" title="In-browser Pyodide kernel (WebAssembly)">
 				<span class={kernelDotClass} aria-hidden="true"></span>
 				<span>{kernelLabel}</span>
 			</div>
@@ -886,8 +911,8 @@
 				{/if}
 				<div class="nb-canvas__inner" class:nb-canvas__inner--full={fullWidthNotebook}>
 					{#if showToc && tocEntries.length > 0}
-						<nav class="nb-toc" aria-label="Table of contents">
-							<p class="nb-toc__title">Contents</p>
+						<nav class="nb-toc" aria-label="Outline">
+							<p class="nb-toc__title">Outline</p>
 							<ol>
 								{#each tocEntries as entry (entry.cellId + entry.title)}
 									<li class="nb-toc__level-{entry.level}">
@@ -906,115 +931,97 @@
 						</nav>
 					{/if}
 					{#each notebook.cells as cell, i (cell.id)}
-						<article class="nb-cell" id="nb-cell-{cell.id}">
-							<div class="nb-cell__gutter">
-								{#if cell.kind === 'code'}
-									<button
-										type="button"
-										class="nb-run"
-										disabled={running}
-										title="Run cell"
-										aria-label="Run cell {i + 1}"
-										onclick={() => runCell(cell.id)}
-									>
-										▶
-									</button>
-								{/if}
-								<span class="nb-cell__index">{i + 1}</span>
-								{#if cell.kind === 'code' && cellOutputs[cell.id]}
-									<span class="nb-cell__exec" title={formatRunSummary(
-										cellOutputs[cell.id].startedAt,
-										cellOutputs[cell.id].finishedAt,
-										cellOutputs[cell.id].durationMs
-									)}>
-										In [{cellOutputs[cell.id].executionCount}]
-									</span>
-								{/if}
-							</div>
-							<div class="nb-cell__body">
-								<div class="nb-cell-toolbar">
-									<span class="nb-cell-toolbar__tag">{cell.kind}</span>
-									<div class="nb-cell-toolbar__actions">
-										<button type="button" class="nb-chip" onclick={() => addCell('code', i)}>+ code</button>
-										<button type="button" class="nb-chip" onclick={() => addCell('markdown', i)}>+ md</button>
-										<button type="button" class="nb-chip" onclick={() => duplicateCell(i)}>Duplicate</button>
-										<button type="button" class="nb-chip" onclick={() => moveCell(i, -1)} disabled={i === 0}>↑</button>
-										<button
-											type="button"
-											class="nb-chip"
-											onclick={() => moveCell(i, 1)}
-											disabled={i === notebook.cells.length - 1}>↓</button
-										>
-										<button
-											type="button"
-											class="nb-chip nb-chip--warn"
-											onclick={() => deleteCell(i)}
-											disabled={notebook.cells.length <= 1}>Delete</button
-										>
-									</div>
-								</div>
-
-								{#if cell.kind === 'markdown'}
-									<MarkdownCell
-										bind:value={cell.source}
-										label="Markdown cell {i + 1}"
-										onchange={persistNotebook}
-									/>
-								{:else if cell.kind === 'raw'}
-									<RawCell
-										bind:value={cell.source}
-										label="Raw cell {i + 1}"
-										onchange={persistNotebook}
-									/>
-								{:else}
-									<MonacoCodeCell
-										bind:value={cell.source}
-										disabled={running}
-										label="Code cell {i + 1}"
-										onchange={persistNotebook}
-										onrun={() => runCell(cell.id)}
-										onrunadvance={() => runCellAndAdvance(cell.id)}
-									/>
-									{#if cellOutputs[cell.id]}
-										<div class="nb-run-meta" aria-live="polite">
-											<span class="nb-run-meta__count">In [{cellOutputs[cell.id].executionCount}]</span>
-											<span class="nb-run-meta__time" title="Started {formatRunTimestamp(cellOutputs[cell.id].startedAt)}">
-												{formatRunTimestamp(cellOutputs[cell.id].finishedAt)}
-											</span>
-											<span class="nb-run-meta__duration">{formatDuration(cellOutputs[cell.id].durationMs)}</span>
-										</div>
-										{#if cellOutputs[cell.id].figures?.length}
-											<div class="nb-figure-output" aria-label="Figure output">
-												{#each cellOutputs[cell.id].figures as figure, fi (fi)}
-													<img
-														src="data:image/png;base64,{figure}"
-														alt="Matplotlib figure {fi + 1}"
-														loading="lazy"
-													/>
-												{/each}
+						<div class="nb-cell-stack" id="nb-cell-{cell.id}">
+							<NotebookCellChrome
+								index={i}
+								kind={cell.kind}
+								focused={activeCellId === cell.id}
+								collapsed={Boolean(collapsedCells[cell.id])}
+								running={running}
+								canDelete={notebook.cells.length > 1}
+								canMoveUp={i > 0}
+								canMoveDown={i < notebook.cells.length - 1}
+								markdownMode={markdownModes[cell.id] ?? 'preview'}
+								onfocus={() => (activeCellId = cell.id)}
+								ontogglecollapse={() => toggleCellCollapsed(cell.id)}
+								onrun={() => runCell(cell.id)}
+								onrunadvance={() => runCellAndAdvance(cell.id)}
+								ondelete={() => deleteCell(i)}
+								onduplicate={() => duplicateCell(i)}
+								onmoveup={() => moveCell(i, -1)}
+								onmovedown={() => moveCell(i, 1)}
+								oninsertcode={() => addCell('code', i - 1)}
+								oninsertmarkdown={() => addCell('markdown', i - 1)}
+								onmarkdownmode={(mode) => setMarkdownMode(cell.id, mode)}
+							>
+								{#snippet children()}
+									{#if cell.kind === 'markdown'}
+										<MarkdownCell
+											bind:value={cell.source}
+											mode={markdownModes[cell.id] ?? 'preview'}
+											label="Markdown cell {i + 1}"
+											onchange={persistNotebook}
+										/>
+									{:else if cell.kind === 'raw'}
+										<RawCell
+											bind:value={cell.source}
+											label="Raw cell {i + 1}"
+											onchange={persistNotebook}
+										/>
+									{:else}
+										<MonacoCodeCell
+											bind:value={cell.source}
+											disabled={running}
+											label="Code cell {i + 1}"
+											onchange={persistNotebook}
+											onrun={() => runCell(cell.id)}
+											onrunadvance={() => runCellAndAdvance(cell.id)}
+											onfocus={() => (activeCellId = cell.id)}
+										/>
+										{#if cellOutputs[cell.id]}
+											<div class="nb-run-meta" aria-live="polite">
+												<span class="nb-run-meta__count">In [{cellOutputs[cell.id].executionCount}]</span>
+												<span
+													class="nb-run-meta__time"
+													title="Started {formatRunTimestamp(cellOutputs[cell.id].startedAt)}"
+												>
+													{formatRunTimestamp(cellOutputs[cell.id].finishedAt)}
+												</span>
+												<span class="nb-run-meta__duration">{formatDuration(cellOutputs[cell.id].durationMs)}</span>
 											</div>
-										{/if}
-										{#if notebookTrusted && cellOutputs[cell.id].html?.length}
-											{#each cellOutputs[cell.id].html as fragment, hi (hi)}
-												<div class="nb-html-output">
-													{@html sanitizeTrustedHtml(fragment)}
+											{#if cellOutputs[cell.id].figures?.length}
+												<div class="nb-figure-output" aria-label="Figure output">
+													{#each cellOutputs[cell.id].figures as figure, fi (fi)}
+														<img
+															src="data:image/png;base64,{figure}"
+															alt="Matplotlib figure {fi + 1}"
+															loading="lazy"
+														/>
+													{/each}
 												</div>
-											{/each}
-										{/if}
-										{#if cellOutputs[cell.id].text}
-											<pre
-												class="nb-output"
-												class:nb-output--err={!cellOutputs[cell.id].ok}
-												class:nb-output--scroll={shouldScrollOutput(
-													cellOutputs[cell.id].text,
-													cell.metadata?.scrolled
-												)}
-											>{cellOutputs[cell.id].text}</pre>
+											{/if}
+											{#if notebookTrusted && cellOutputs[cell.id].html?.length}
+												{#each cellOutputs[cell.id].html as fragment, hi (hi)}
+													<div class="nb-html-output">
+														{@html sanitizeTrustedHtml(fragment)}
+													</div>
+												{/each}
+											{/if}
+											{#if cellOutputs[cell.id].text}
+												<pre
+													class="nb-output"
+													class:nb-output--err={!cellOutputs[cell.id].ok}
+													class:nb-output--scroll={shouldScrollOutput(
+														cellOutputs[cell.id].text,
+														cell.metadata?.scrolled
+													)}
+												>{cellOutputs[cell.id].text}</pre>
+											{/if}
 										{/if}
 									{/if}
-								{/if}
-							</div>
-						</article>
+								{/snippet}
+							</NotebookCellChrome>
+						</div>
 					{/each}
 				</div>
 			</div>

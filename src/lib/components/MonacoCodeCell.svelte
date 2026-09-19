@@ -7,7 +7,8 @@
 	 *   label?: string,
 	 *   onchange?: (value: string) => void,
 	 *   onrun?: () => void,
-	 *   onrunadvance?: () => void
+	 *   onrunadvance?: () => void,
+	 *   onfocus?: () => void
 	 * }} */
 	let {
 		value = $bindable(''),
@@ -15,7 +16,8 @@
 		label = 'Code cell',
 		onchange,
 		onrun,
-		onrunadvance
+		onrunadvance,
+		onfocus
 	} = $props();
 
 	/** @type {HTMLDivElement | undefined} */
@@ -35,7 +37,8 @@
 				onchange?.(next);
 			},
 			onRunCell: () => onrun?.(),
-			onRunCellAdvance: () => (onrunadvance ?? onrun)?.()
+			onRunCellAdvance: () => (onrunadvance ?? onrun)?.(),
+			onFocus: () => onfocus?.()
 		});
 	});
 

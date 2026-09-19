@@ -4,7 +4,9 @@ export const COMPLETION_TIER = {
 	MEMBER: 0,
 	METHOD: 1,
 	GLOBAL: 2,
-	GENERAL: 3
+	GENERAL: 3,
+	PRIVATE: 4,
+	DUNDER: 5
 };
 
 /**
@@ -22,6 +24,13 @@ export function completionTier(item) {
 	}
 	if (detail === 'kernel global') {
 		return COMPLETION_TIER.GLOBAL;
+	}
+	const name = completionLabel(item);
+	if (name.startsWith('__') && name.endsWith('__')) {
+		return COMPLETION_TIER.DUNDER;
+	}
+	if (name.startsWith('_')) {
+		return COMPLETION_TIER.PRIVATE;
 	}
 	return COMPLETION_TIER.GENERAL;
 }
@@ -44,10 +53,17 @@ export function completionLabel(item) {
 
 /**
  * @param {SortableCompletionItem[]} items
+ * @param {{ typedPrefix?: string }} [options]
  * @returns {SortableCompletionItem[]}
  */
-export function sortCompletionItems(items) {
+export function sortCompletionItems(items, options = {}) {
+	const typedPrefix = (options.typedPrefix ?? '').toLowerCase();
 	return [...items].sort((a, b) => {
+		if (typedPrefix) {
+			const aMatch = completionLabel(a).toLowerCase().startsWith(typedPrefix) ? 0 : 1;
+			const bMatch = completionLabel(b).toLowerCase().startsWith(typedPrefix) ? 0 : 1;
+			if (aMatch !== bMatch) return aMatch - bMatch;
+		}
 		const tierDelta = completionTier(a) - completionTier(b);
 		if (tierDelta !== 0) return tierDelta;
 		return completionLabel(a).localeCompare(completionLabel(b), undefined, {

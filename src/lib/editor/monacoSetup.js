@@ -47,7 +47,9 @@ function registerNotebookTheme(monaco) {
 			'editorWidget.border': '#2c2924',
 			'editorSuggestWidget.background': '#141311',
 			'editorSuggestWidget.border': '#2c2924',
-			'editorSuggestWidget.selectedBackground': '#3d3830'
+			'editorSuggestWidget.selectedBackground': '#04395e',
+			'editorSuggestWidget.highlightForeground': '#18a3ff',
+			'editorSuggestWidget.foreground': '#cccccc'
 		}
 	});
 }
@@ -219,8 +221,9 @@ function registerPythonFeatures(monaco) {
 				suggestions.push(...attrSuggestions);
 			}
 
+			const typedPrefix = word.word ?? '';
 			return { suggestions: /** @type {import('monaco-editor').languages.CompletionItem[]} */ (
-				sortCompletionItems(suggestions)
+				sortCompletionItems(suggestions, { typedPrefix })
 			) };
 		}
 	});
@@ -320,7 +323,8 @@ export async function ensureMonacoReady() {
  *   readOnly?: boolean,
  *   onChange?: (value: string) => void,
  *   onRunCell?: () => void,
- *   onRunCellAdvance?: () => void
+ *   onRunCellAdvance?: () => void,
+ *   onFocus?: () => void
  * }} options
  */
 export async function createMonacoEditor(container, initialValue, options = {}) {
@@ -375,6 +379,10 @@ export async function createMonacoEditor(container, initialValue, options = {}) 
 		options.onChange?.(editor.getValue());
 	});
 
+	const focusDisposable = editor.onDidFocusEditorWidget(() => {
+		options.onFocus?.();
+	});
+
 	const runAction = editor.addAction({
 		id: 'notebook.runCell',
 		label: 'Run Cell',
@@ -400,6 +408,7 @@ export async function createMonacoEditor(container, initialValue, options = {}) 
 		dispose: () => {
 			sizeDisposable.dispose();
 			changeDisposable.dispose();
+			focusDisposable.dispose();
 			runAction.dispose();
 			editor.dispose();
 		},

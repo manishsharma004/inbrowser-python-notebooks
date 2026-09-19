@@ -24,3 +24,16 @@ test('sortCompletionItems orders tiers then alphabetically', () => {
 
 	assert.deepEqual(sorted, ['alpha', 'beta', 'append', 'user_x', 'zip']);
 });
+
+test('sortCompletionItems prefers prefix match and deprioritizes dunders', () => {
+	const sorted = sortCompletionItems(
+		[
+			{ label: '__dict__', detail: 'builtin' },
+			{ label: 'date', detail: 'datetime member' },
+			{ label: 'datetime', detail: 'datetime member' }
+		],
+		{ typedPrefix: 'd' }
+	).map((item) => item.label);
+
+	assert.deepEqual(sorted, ['date', 'datetime', '__dict__']);
+});
