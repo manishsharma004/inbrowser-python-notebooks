@@ -2,6 +2,16 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
+		<script>
+			(function () {
+				var k = 'nb-theme-preference-v1';
+				var p = localStorage.getItem(k) || 'dark';
+				var dark =
+					p === 'dark' || (p === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+				document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+				document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+			})();
+		</script>
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="Python notebooks in the browser with Pyodide and IndexedDB storage." />
