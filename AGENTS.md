@@ -34,6 +34,8 @@ Grounded architecture lives in **`archify.md`** (regenerate with `npm run archif
 - **Workspace persistence:** Notebooks imported via **Import** are stored in **IndexedDB** on the current browser origin (host + port). Use the same URL after restart (e.g. always `http://192.168.x.x:7502/...`, not switching between ports).
 - **Build:** `npm run build` → output in `dist/`
 - **Tests:** `npm test` (Node built-in test runner); `npm run check` for Svelte/TS; `npm run test:e2e` (Playwright smoke — uses `preview:e2e` on port **43174**, not dev port 4174)
+- **Theme:** Dark / Light / System in notebook **⋯** menu (`nb-theme-preference-v1` in localStorage)
+- **Files:** JupyterLab-style file browser in left rail (folders, upload, modified column)
 
 ### Agent behavior (required)
 

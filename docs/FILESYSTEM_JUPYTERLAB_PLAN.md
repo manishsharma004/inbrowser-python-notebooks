@@ -6,6 +6,10 @@ Reference UI (Try Jupyter): toolbar (+ launcher, new folder, upload, refresh, fi
 
 ---
 
+## Status
+
+**Implemented** (2026-09): VFS CRUD, `FileBrowser.svelte`, text file editor, workspace JSON bundle import/export, running dots, breadcrumbs, upload/filter/sort.
+
 ## Goals
 
 | Goal | Notes |

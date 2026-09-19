@@ -2,6 +2,10 @@
 
 Plan for **light**, **dark**, and **system** appearance while keeping one codebase for GitHub Pages static export. Aligns with VS Code Jupyter UX (user preference) without requiring Jupyter Server.
 
+## Status
+
+**Implemented** (2026-09): dark/light/system via `data-theme`, `src/lib/theme/themePreference.js`, Monaco `notebook-py-dark` / `notebook-py-light`, notebook menu theme picker, FOUC bootstrap in `app.html`.
+
 ## Goals
 
 | Goal | Notes |
