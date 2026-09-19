@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<script>
+			(function () {
+				var k = 'nb-theme-preference-v1';
+				var p = localStorage.getItem(k) || 'dark';
+				var dark =
+					p === 'dark' || (p === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+				document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+				document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+			})();
+		</script>
+		<link rel="icon" href="/inbrowser-python-notebooks/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Python notebooks in the browser with Pyodide and IndexedDB storage." />
+		<link href="/inbrowser-python-notebooks/_app/immutable/entry/start.CAKuI31e.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/chunks/CeCAydRf.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/chunks/DbDK_xpD.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/entry/app.dcIagImo.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/chunks/uBIymjUX.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/chunks/xihTtKlq.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/nodes/0.hTypwIZB.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/nodes/2.BGiq14Sl.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/chunks/CBhYlja5.js" rel="modulepreload">
+		<!--12qhfyh--><link rel="icon" href="data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%20fill='none'%3e%3crect%20width='32'%20height='32'%20fill='%230f0e0c'/%3e%3crect%20x='4'%20y='5'%20width='24'%20height='22'%20stroke='%232c2924'%20stroke-width='1'/%3e%3crect%20x='7'%20y='9'%20width='5'%20height='2'%20fill='%23d4a017'/%3e%3crect%20x='14'%20y='9'%20width='11'%20height='2'%20fill='%233d3830'/%3e%3crect%20x='7'%20y='14'%20width='5'%20height='2'%20fill='%235c564c'/%3e%3crect%20x='14'%20y='14'%20width='11'%20height='2'%20fill='%232c2924'/%3e%3crect%20x='7'%20y='19'%20width='18'%20height='4'%20fill='%23181715'%20stroke='%232c2924'/%3e%3c/svg%3e"/><!----><title>notebooks · pyodide</title>
+		<link href="/inbrowser-python-notebooks/_app/immutable/assets/0.dOM6iDtl.css" rel="stylesheet">
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents"><!--[--><!--[0--><!--[--><!--[--><input type="file" accept=".ipynb,.json,application/json" class="nb-sr-only"/> <input type="file" accept=".json,application/json" class="nb-sr-only"/> <!--[0--><p class="nb-loading">mounting workspace…</p><!--]--><!--]--><!----><!--]--><!--]--> <!--[-1--><!--]--><!--]-->
+			
+			<script>
+				{
+					__sveltekit_1133lum = {
+						base: "/inbrowser-python-notebooks",
+						assets: "/inbrowser-python-notebooks"
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("/inbrowser-python-notebooks/_app/immutable/entry/start.CAKuI31e.js"),
+						import("/inbrowser-python-notebooks/_app/immutable/entry/app.dcIagImo.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element, {
+							node_ids: [0, 2],
+							data: [null,null],
+							form: null,
+							error: null
+						});
+					});
+				}
+			</script>
+		</div>
+	</body>
+</html>

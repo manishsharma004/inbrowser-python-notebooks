@@ -1,0 +1,1 @@
+var e={modules:[],members:{},globals:[]};function t(t){e={modules:[...t.modules??[]],members:{...t.members??{}},globals:[...t.globals??[]]}}function n(){e={modules:[],members:{},globals:[]}}function r(){return e}export{r as n,t as r,n as t};
