@@ -1,4 +1,6 @@
 <script>
+	import Codicon from '$lib/components/Codicon.svelte';
+
 	/** @type {{
 	 *   index: number,
 	 *   kind: 'code' | 'markdown' | 'raw',
@@ -13,6 +15,11 @@
 	 *   ontogglecollapse?: () => void,
 	 *   onrun?: () => void,
 	 *   onrunadvance?: () => void,
+	 *   onrunbelow?: () => void,
+	 *   onclearoutput?: () => void,
+	 *   onchangecode?: () => void,
+	 *   onchangemarkdown?: () => void,
+	 *   onrunallbelow?: () => void,
 	 *   ondelete?: () => void,
 	 *   onduplicate?: () => void,
 	 *   onmoveup?: () => void,
@@ -36,6 +43,11 @@
 		ontogglecollapse,
 		onrun,
 		onrunadvance,
+		onrunbelow,
+		onclearoutput,
+		onchangecode,
+		onchangemarkdown,
+		onrunallbelow,
 		ondelete,
 		onduplicate,
 		onmoveup,
@@ -49,8 +61,12 @@
 
 <div class="nb-cell-insert">
 	<div class="nb-cell-insert__bar" role="group" aria-label="Insert cell above cell {index + 1}">
-		<button type="button" class="nb-cell-insert__btn" onclick={() => oninsertcode?.()}>+ Code</button>
-		<button type="button" class="nb-cell-insert__btn" onclick={() => oninsertmarkdown?.()}>+ Markdown</button>
+		<button type="button" class="nb-cell-insert__btn" onclick={() => oninsertcode?.()}>
+			<Codicon name="add" /> Code
+		</button>
+		<button type="button" class="nb-cell-insert__btn" onclick={() => oninsertmarkdown?.()}>
+			<Codicon name="markdown" /> Markdown
+		</button>
 	</div>
 </div>
 
@@ -70,7 +86,7 @@
 			aria-label={collapsed ? 'Expand cell' : 'Collapse cell'}
 			onclick={() => ontogglecollapse?.()}
 		>
-			<span class="nb-cell-frame__chevron" aria-hidden="true"></span>
+			<Codicon name="chevron-down" class="nb-cell-frame__chevron-icon" />
 		</button>
 		<div class="nb-cell-frame__toolbar" role="toolbar" aria-label="Cell {index + 1} actions">
 			{#if kind === 'code'}
@@ -82,7 +98,7 @@
 					disabled={running}
 					onclick={() => onrun?.()}
 				>
-					▶
+					<Codicon name="play" label="Run" />
 				</button>
 				<button
 					type="button"
@@ -92,7 +108,17 @@
 					disabled={running}
 					onclick={() => onrunadvance?.()}
 				>
-					⏷
+					<Codicon name="run-above" label="Run and advance" />
+				</button>
+				<button
+					type="button"
+					class="nb-icon-btn"
+					title="Run cell and below"
+					aria-label="Run cell {index + 1} and below"
+					disabled={running}
+					onclick={() => onrunallbelow?.()}
+				>
+					<Codicon name="run-all" label="Run below" />
 				</button>
 			{/if}
 			{#if kind === 'markdown'}
@@ -116,8 +142,16 @@
 				</button>
 			{/if}
 			<details class="nb-cell-menu">
-				<summary class="nb-icon-btn nb-cell-menu__trigger" title="More actions">⋯</summary>
+				<summary class="nb-icon-btn nb-cell-menu__trigger" title="More actions">
+					<Codicon name="kebab-vertical" label="More" />
+				</summary>
 				<div class="nb-cell-menu__panel">
+					{#if kind === 'code'}
+						<button type="button" disabled={running} onclick={() => onrunbelow?.()}>Run cell below</button>
+						<button type="button" onclick={() => onclearoutput?.()}>Clear outputs</button>
+					{/if}
+					<button type="button" onclick={() => onchangecode?.()}>Change to code</button>
+					<button type="button" onclick={() => onchangemarkdown?.()}>Change to markdown</button>
 					<button type="button" onclick={() => onduplicate?.()}>Duplicate cell</button>
 					<button type="button" disabled={!canMoveUp} onclick={() => onmoveup?.()}>Move up</button>
 					<button type="button" disabled={!canMoveDown} onclick={() => onmovedown?.()}>Move down</button>
@@ -131,16 +165,20 @@
 				disabled={!canDelete}
 				onclick={() => ondelete?.()}
 			>
-				⌫
+				<Codicon name="trash" label="Delete" />
 			</button>
 		</div>
-		<span class="nb-cell-frame__index">{index + 1}</span>
+		<span class="nb-cell-frame__index">[{index + 1}]</span>
 	</div>
 	{#if !collapsed}
 		<div class="nb-cell-frame__body">
 			{@render children?.()}
 			{#if kind === 'code'}
 				<span class="nb-cell-frame__lang">Python</span>
+			{:else if kind === 'markdown'}
+				<span class="nb-cell-frame__lang">Markdown</span>
+			{:else}
+				<span class="nb-cell-frame__lang">Raw</span>
 			{/if}
 		</div>
 	{/if}

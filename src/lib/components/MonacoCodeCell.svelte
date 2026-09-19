@@ -2,21 +2,25 @@
 	import { onDestroy, onMount } from 'svelte';
 
 	/** @type {{
+	 *   cellId: string,
 	 *   value?: string,
 	 *   disabled?: boolean,
 	 *   label?: string,
 	 *   onchange?: (value: string) => void,
 	 *   onrun?: () => void,
 	 *   onrunadvance?: () => void,
+	 *   onruninsertbelow?: () => void,
 	 *   onfocus?: () => void
 	 * }} */
 	let {
+		cellId,
 		value = $bindable(''),
 		disabled = false,
 		label = 'Code cell',
 		onchange,
 		onrun,
 		onrunadvance,
+		onruninsertbelow,
 		onfocus
 	} = $props();
 
@@ -25,24 +29,32 @@
 	/** @type {Awaited<ReturnType<typeof import('$lib/editor/monacoSetup.js').createMonacoEditor>> | null} */
 	let editorHandle = $state(null);
 	let syncing = false;
+	/** @type {(() => void) | undefined} */
+	let unregisterFocus;
 
-	onMount(async () => {
-		if (!container) return;
-		const { createMonacoEditor } = await import('$lib/editor/monacoSetup.js');
-		editorHandle = await createMonacoEditor(container, value, {
-			readOnly: disabled,
-			onChange: (next) => {
-				if (syncing) return;
-				value = next;
-				onchange?.(next);
-			},
-			onRunCell: () => onrun?.(),
-			onRunCellAdvance: () => (onrunadvance ?? onrun)?.(),
-			onFocus: () => onfocus?.()
-		});
+	onMount(() => {
+		void (async () => {
+			if (!container) return;
+			const { createMonacoEditor } = await import('$lib/editor/monacoSetup.js');
+			const { registerNotebookCellEditor } = await import('$lib/editor/notebookEditorRegistry.js');
+			editorHandle = await createMonacoEditor(container, value, {
+				readOnly: disabled,
+				onChange: (next) => {
+					if (syncing) return;
+					value = next;
+					onchange?.(next);
+				},
+				onRunCell: () => onrun?.(),
+				onRunCellAdvance: () => (onrunadvance ?? onrun)?.(),
+				onRunCellAndInsertBelow: () => (onruninsertbelow ?? onrunadvance ?? onrun)?.(),
+				onFocus: () => onfocus?.()
+			});
+			unregisterFocus = registerNotebookCellEditor(cellId, () => editorHandle?.editor.focus());
+		})();
 	});
 
 	onDestroy(() => {
+		unregisterFocus?.();
 		editorHandle?.dispose();
 		editorHandle = null;
 	});
