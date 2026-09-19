@@ -12,6 +12,11 @@
 	import { emptySnapshot } from '$lib/vfs/vfsTree.js';
 	import { parseNotebook, serializeNotebook } from '$lib/notebook/parseNotebook.js';
 	import {
+		applyCellOutputsToNotebook,
+		cellOutputsFromNotebook
+	} from '$lib/notebook/notebookRunState.js';
+	import { shouldScrollOutput } from '$lib/notebook/nbformatOutputs.js';
+	import {
 		downloadTextFile,
 		parseImportedNotebook,
 		toJupyterNotebook
@@ -89,6 +94,9 @@
 	let sessionWidth = $state(304);
 	let importSessionSourceId = $state('');
 	let workspaceLoadError = $state(/** @type {string | null} */ (null));
+	let railTab = $state(/** @type {'files' | 'running'} */ ('files'));
+	let runningCellId = $state(/** @type {string | null} */ (null));
+	let kernelRestarting = $state(false);
 
 	const LAST_OPEN_FILE_KEY = 'nb-last-open-file-v1';
 
@@ -164,7 +172,7 @@
 			}
 			activeFileId = fileId;
 			notebook = parseNotebook(rawContent);
-			cellOutputs = {};
+			cellOutputs = cellOutputsFromNotebook(notebook.cells);
 			importSessionSourceId = '';
 			if (typeof localStorage !== 'undefined') {
 				localStorage.setItem(LAST_OPEN_FILE_KEY, fileId);
@@ -172,6 +180,7 @@
 			await switchKernelToFile(fileId);
 		} else {
 			notebook = parseNotebook(rawContent);
+			cellOutputs = cellOutputsFromNotebook(notebook.cells);
 		}
 		if (notebook) {
 			syncNotebookCellsForAnalysis(fileId, notebook.cells);
@@ -258,7 +267,9 @@
 
 	async function persistNotebook() {
 		if (!snapshot || !activeFileId || !notebook) return;
-		writeFile(snapshot, activeFileId, serializeNotebook(notebook));
+		const doc = applyCellOutputsToNotebook(notebook, cellOutputs);
+		notebook = doc;
+		writeFile(snapshot, activeFileId, serializeNotebook(doc));
 		await saveSnapshot(snapshot);
 		snapshot = bumpSnapshot(snapshot);
 	}
@@ -408,12 +419,46 @@
 	}
 
 	async function restartKernel() {
+		kernelRestarting = true;
 		resetPythonRuntime();
 		clearDynamicPythonCompletions();
 		pyodideStatus = 'idle';
 		cellOutputs = {};
 		sessionGlobals = {};
 		sessionEnviron = {};
+		runningCellId = null;
+		if (notebook) {
+			notebook = applyCellOutputsToNotebook(notebook, {});
+			await persistNotebook();
+		}
+		kernelRestarting = false;
+	}
+
+	async function clearAllOutputs() {
+		cellOutputs = {};
+		if (notebook) {
+			notebook = applyCellOutputsToNotebook(notebook, {});
+			await persistNotebook();
+		}
+	}
+
+	async function trustNotebook() {
+		if (!notebook) return;
+		notebook = {
+			...notebook,
+			metadata: { ...notebook.metadata, trusted: true }
+		};
+		await persistNotebook();
+	}
+
+	async function toggleFullWidth() {
+		if (!notebook) return;
+		const next = !notebook.metadata?.fullWidth;
+		notebook = {
+			...notebook,
+			metadata: { ...notebook.metadata, fullWidth: next }
+		};
+		await persistNotebook();
 	}
 
 	async function runCell(cellId) {
@@ -421,6 +466,7 @@
 		if (!cell || cell.kind !== 'code') return;
 
 		running = true;
+		runningCellId = cellId;
 		pyodideStatus = 'loading';
 		const startedAt = Date.now();
 		const timerStart = performance.now();
@@ -429,6 +475,7 @@
 		const finishedAt = Date.now();
 		pyodideStatus = 'ready';
 		running = false;
+		runningCellId = null;
 
 		const chunks = [];
 		if (result.stdout) chunks.push(result.stdout);
@@ -460,6 +507,19 @@
 		}
 
 		await refreshSessionInspector();
+		await persistNotebook();
+	}
+
+	/** @param {string} cellId */
+	async function runCellAndAdvance(cellId) {
+		await runCell(cellId);
+		if (!notebook) return;
+		const index = notebook.cells.findIndex((c) => c.id === cellId);
+		for (let j = index + 1; j < notebook.cells.length; j++) {
+			const next = notebook.cells[j];
+			document.getElementById(`nb-cell-${next.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+			break;
+		}
 	}
 
 	/**
@@ -579,15 +639,26 @@
 	const otherSessionSources = $derived.by(() => files.filter((file) => file.id !== activeFileId));
 
 	const kernelLabel = $derived.by(() => {
-		if (pyodideStatus === 'loading' || running) return 'Python · starting';
-		if (pyodideStatus === 'ready') return 'Python · idle';
-		return 'Python · cold';
+		if (kernelRestarting) return 'Kernel · restarting';
+		if (running || pyodideStatus === 'loading') return 'Kernel · busy';
+		if (pyodideStatus === 'ready') return 'Kernel · idle';
+		return 'Kernel · cold';
 	});
 
 	const kernelDotClass = $derived.by(() => {
+		if (kernelRestarting) return 'nb-kernel__dot nb-kernel__dot--busy';
 		if (pyodideStatus === 'loading' || running) return 'nb-kernel__dot nb-kernel__dot--busy';
 		if (pyodideStatus === 'ready') return 'nb-kernel__dot nb-kernel__dot--ready';
 		return 'nb-kernel__dot';
+	});
+
+	const notebookTrusted = $derived.by(() => notebook?.metadata?.trusted !== false);
+	const fullWidthNotebook = $derived.by(() => notebook?.metadata?.fullWidth === true);
+
+	const runningCellLabel = $derived.by(() => {
+		if (!runningCellId || !notebook) return null;
+		const index = notebook.cells.findIndex((c) => c.id === runningCellId);
+		return index >= 0 ? `Cell ${index + 1}` : null;
 	});
 </script>
 
@@ -614,8 +685,14 @@
 				<button type="button" class="nb-chip" onclick={triggerImport}>Import</button>
 				<button type="button" class="nb-chip" onclick={exportNotebookJson}>Export JSON</button>
 				<button type="button" class="nb-chip" onclick={exportNotebookJupyter}>Export .ipynb</button>
+				<button type="button" class="nb-chip" onclick={() => clearAllOutputs()} disabled={running}>
+					Clear outputs
+				</button>
+				<button type="button" class="nb-chip" onclick={() => toggleFullWidth()}>
+					{fullWidthNotebook ? 'Standard width' : 'Full width'}
+				</button>
 			</div>
-			<div class="nb-kernel" title="Pyodide loads from CDN on first run">
+			<div class="nb-kernel" title="Pyodide WebAssembly kernel in this tab">
 				<span class={kernelDotClass} aria-hidden="true"></span>
 				<span>{kernelLabel}</span>
 			</div>
@@ -633,6 +710,27 @@
 			style="--rail-width: {railWidth}px; --session-width: {sessionWidth}px"
 		>
 			<aside class="nb-rail" aria-label="Workspace files">
+				<div class="nb-rail__tabs" role="tablist">
+					<button
+						type="button"
+						role="tab"
+						aria-selected={railTab === 'files'}
+						class:nb-rail__tab--active={railTab === 'files'}
+						onclick={() => (railTab = 'files')}
+					>
+						Files
+					</button>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={railTab === 'running'}
+						class:nb-rail__tab--active={railTab === 'running'}
+						onclick={() => (railTab = 'running')}
+					>
+						Running
+					</button>
+				</div>
+				{#if railTab === 'files'}
 				<div class="nb-rail__head">
 					<p class="nb-rail__label">local store</p>
 					<p class="nb-rail__hint">Notebooks live in IndexedDB on this device.</p>
@@ -653,6 +751,22 @@
 				<div class="nb-rail__foot">
 					<button type="button" class="nb-new-btn" onclick={addNotebook}>+ new notebook</button>
 				</div>
+				{:else}
+				<div class="nb-rail__head">
+					<p class="nb-rail__label">running</p>
+					<p class="nb-rail__hint">Kernel activity in this tab.</p>
+				</div>
+				<ul class="nb-running-list">
+					<li>
+						<span class="nb-running-list__status">{kernelLabel}</span>
+					</li>
+					{#if runningCellLabel}
+						<li>Executing {runningCellLabel}</li>
+					{:else if pyodideStatus === 'ready'}
+						<li class="nb-running-list__idle">No cells running</li>
+					{/if}
+				</ul>
+				{/if}
 			</aside>
 
 			<button
@@ -663,6 +777,13 @@
 			></button>
 
 			<div class="nb-canvas">
+				{#if !notebookTrusted}
+					<div class="nb-restore-banner nb-restore-banner--trust" role="status">
+						<strong>Not trusted</strong>
+						<span>Imported notebooks stay in sandboxed markdown until you trust this file.</span>
+						<button type="button" class="nb-chip" onclick={() => trustNotebook()}>Trust notebook</button>
+					</div>
+				{/if}
 				{#if showRestoreBanner && kernelSession}
 					<div class="nb-restore-banner" role="status" aria-live="polite">
 						<strong>Saved kernel session</strong>
@@ -696,9 +817,9 @@
 						</button>
 					</div>
 				{/if}
-				<div class="nb-canvas__inner">
+				<div class="nb-canvas__inner" class:nb-canvas__inner--full={fullWidthNotebook}>
 					{#each notebook.cells as cell, i (cell.id)}
-						<article class="nb-cell">
+						<article class="nb-cell" id="nb-cell-{cell.id}">
 							<div class="nb-cell__gutter">
 								{#if cell.kind === 'code'}
 									<button
@@ -758,6 +879,7 @@
 										label="Code cell {i + 1}"
 										onchange={persistNotebook}
 										onrun={() => runCell(cell.id)}
+										onrunadvance={() => runCellAndAdvance(cell.id)}
 									/>
 									{#if cellOutputs[cell.id]}
 										<div class="nb-run-meta" aria-live="polite">
@@ -782,6 +904,10 @@
 											<pre
 												class="nb-output"
 												class:nb-output--err={!cellOutputs[cell.id].ok}
+												class:nb-output--scroll={shouldScrollOutput(
+													cellOutputs[cell.id].text,
+													cell.metadata?.scrolled
+												)}
 											>{cellOutputs[cell.id].text}</pre>
 										{/if}
 									{/if}

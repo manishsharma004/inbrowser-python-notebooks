@@ -319,7 +319,8 @@ export async function ensureMonacoReady() {
  * @param {{
  *   readOnly?: boolean,
  *   onChange?: (value: string) => void,
- *   onRunCell?: () => void
+ *   onRunCell?: () => void,
+ *   onRunCellAdvance?: () => void
  * }} options
  */
 export async function createMonacoEditor(container, initialValue, options = {}) {
@@ -377,11 +378,15 @@ export async function createMonacoEditor(container, initialValue, options = {}) 
 	const runAction = editor.addAction({
 		id: 'notebook.runCell',
 		label: 'Run Cell',
-		keybindings: [
-			monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
-			monaco.KeyMod.Shift | monaco.KeyCode.Enter
-		],
+		keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
 		run: () => options.onRunCell?.()
+	});
+
+	editor.addAction({
+		id: 'notebook.runCellAdvance',
+		label: 'Run Cell and Select Next',
+		keybindings: [monaco.KeyMod.Shift | monaco.KeyCode.Enter],
+		run: () => (options.onRunCellAdvance ?? options.onRunCell)?.()
 	});
 
 	if (import.meta.env.VITE_ENABLE_PYRIGHT === 'true') {

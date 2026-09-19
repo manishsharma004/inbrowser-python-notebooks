@@ -3,6 +3,10 @@
  */
 
 import { randomId } from '../utils/randomId.js';
+import {
+	jupyterOutputsFromRunSnapshot,
+	runSnapshotFromJupyterOutputs
+} from './nbformatOutputs.js';
 
 /**
  * @param {unknown} value
@@ -31,19 +35,49 @@ function normalizeJupyterSource(source) {
  */
 export function fromJupyterNotebook(raw, options = {}) {
 	const createId = options.createId ?? (() => randomId());
-	/** @type {{ cell_type?: string; source?: string | string[] }[]} */
+	/** @type {Record<string, unknown>[]} */
 	const cells = Array.isArray(raw.cells) ? raw.cells : [];
+
+	const mapped = cells
+		.map((cell) => {
+			const cellType = String(cell.cell_type ?? '');
+			if (cellType !== 'markdown' && cellType !== 'code') {
+				return null;
+			}
+			const kind = cellType === 'markdown' ? /** @type {'markdown'} */ ('markdown') : /** @type {'code'} */ ('code');
+			/** @type {import('./parseNotebook.js').NotebookCell} */
+			const mappedCell = {
+				id: createId(),
+				kind,
+				source: normalizeJupyterSource(/** @type {string | string[]} */ (cell.source ?? ''))
+			};
+
+			const cellMeta = cell.metadata;
+			if (cellMeta && typeof cellMeta === 'object') {
+				const meta = /** @type {Record<string, unknown>} */ (cellMeta);
+				if (meta.scrolled !== undefined) {
+					mappedCell.metadata = { scrolled: /** @type {boolean | string} */ (meta.scrolled) };
+				}
+			}
+
+			if (kind === 'code') {
+				const executionCount =
+					typeof cell.execution_count === 'number' ? cell.execution_count : null;
+				const snapshot = runSnapshotFromJupyterOutputs(
+					Array.isArray(cell.outputs) ? cell.outputs : [],
+					executionCount
+				);
+				if (snapshot) mappedCell.lastRun = snapshot;
+			}
+
+			return mappedCell;
+		})
+		.filter((cell) => cell !== null);
 
 	return {
 		version: 1,
-		cells: cells.map((cell) => {
-			const kind = cell.cell_type === 'markdown' ? /** @type {'markdown'} */ ('markdown') : /** @type {'code'} */ ('code');
-			return {
-				id: createId(),
-				kind,
-				source: normalizeJupyterSource(cell.source ?? '')
-			};
-		}).filter((cell) => cell.kind === 'markdown' || cell.kind === 'code')
+		metadata: { trusted: false },
+		cells: /** @type {import('./parseNotebook.js').NotebookCell[]} */ (mapped)
 	};
 }
 
@@ -63,6 +97,7 @@ export function toJupyterSourceLines(source) {
  * @returns {Record<string, unknown>}
  */
 export function toJupyterNotebook(doc) {
+	const trusted = doc.metadata?.trusted === true;
 	return {
 		nbformat: 4,
 		nbformat_minor: 5,
@@ -78,13 +113,21 @@ export function toJupyterNotebook(doc) {
 			}
 		},
 		cells: doc.cells.map((cell) => {
+			const cellMetadata =
+				cell.metadata?.scrolled !== undefined ? { scrolled: cell.metadata.scrolled } : {};
 			const base = {
 				cell_type: cell.kind === 'markdown' ? 'markdown' : 'code',
-				metadata: {},
+				metadata: cellMetadata,
 				source: toJupyterSourceLines(cell.source)
 			};
 			if (cell.kind === 'code') {
-				return { ...base, outputs: [], execution_count: null };
+				const outputs = jupyterOutputsFromRunSnapshot(cell.lastRun);
+				return {
+					...base,
+					outputs,
+					execution_count: cell.lastRun?.executionCount ?? null,
+					trusted: trusted && cell.lastRun != null ? true : trusted
+				};
 			}
 			return base;
 		})
@@ -102,14 +145,7 @@ export function parseImportedNotebook(raw) {
 			return fromJupyterNotebook(/** @type {Record<string, unknown>} */ (parsed));
 		}
 		if (parsed && typeof parsed === 'object' && Array.isArray(parsed.cells)) {
-			return /** @type {NotebookDocument} */ ({
-				version: typeof parsed.version === 'number' ? parsed.version : 1,
-				cells: parsed.cells.map((cell, index) => ({
-					id: typeof cell.id === 'string' ? cell.id : `cell-${index}`,
-					kind: cell.kind === 'markdown' ? 'markdown' : 'code',
-					source: typeof cell.source === 'string' ? cell.source : ''
-				}))
-			});
+			return /** @type {NotebookDocument} */ (parsed);
 		}
 	} catch {
 		return null;
