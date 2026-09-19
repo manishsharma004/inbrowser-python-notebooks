@@ -1444,9 +1444,3 @@ body.nb-resize-active {
 .nb-menu-active {
 	background: color-mix(in srgb, var(--focus-ring) 15%, transparent);
 }
-
-.nb-rail {
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-}
