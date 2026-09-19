@@ -2,15 +2,22 @@
 	import { onMount } from 'svelte';
 	import {
 		createNode,
+		duplicateFile,
 		ensureStarterNotebook,
 		ensureStarterDataFiles,
+		getNode,
 		hasPersistedWorkspace,
 		listChildren,
 		loadSnapshot,
+		mkdir,
+		rename,
 		saveSnapshot,
+		unlink,
 		writeFile
 	} from '$lib/vfs/indexedDbVfs.js';
 	import { emptySnapshot } from '$lib/vfs/vfsTree.js';
+	import { isNotebookFileName } from '$lib/vfs/vfsPaths.js';
+	import { parseWorkspaceBundle, serializeWorkspaceBundle } from '$lib/vfs/workspaceBundle.js';
 	import { parseNotebook, serializeNotebook } from '$lib/notebook/parseNotebook.js';
 	import {
 		applyCellOutputsToNotebook,
@@ -54,6 +61,8 @@
 	import RawCell from '$lib/components/RawCell.svelte';
 	import SessionPanel from '$lib/components/SessionPanel.svelte';
 	import NotebookCellChrome from '$lib/components/NotebookCellChrome.svelte';
+	import FileBrowser from '$lib/components/FileBrowser.svelte';
+	import TextFileEditor from '$lib/components/TextFileEditor.svelte';
 	import { attachNotebookKeymap } from '$lib/notebook/notebookKeymap.js';
 	import { cellIndexById, nextCellId, prevCellId } from '$lib/notebook/notebookCellNavigation.js';
 	import { focusNotebookCellEditor } from '$lib/editor/notebookEditorRegistry.js';
@@ -68,6 +77,13 @@
 		SESSION_WIDTH_MAX,
 		SESSION_WIDTH_MIN
 	} from '$lib/layout/panelLayout.js';
+	import {
+		applyResolvedTheme,
+		loadThemePreference,
+		resolveTheme,
+		saveThemePreference,
+		watchSystemTheme
+	} from '$lib/theme/themePreference.js';
 
 	/**
 	 * @typedef {Object} CellRunRecord
@@ -119,8 +135,17 @@
 	let showNotebookMenu = $state(false);
 	/** @type {{ kind: 'code' | 'markdown' | 'raw', source: string, metadata?: Record<string, unknown> } | null} */
 	let cellClipboard = $state(null);
+	let currentDirId = $state('');
+	let editorMode = $state(/** @type {'notebook' | 'text'} */ ('notebook'));
+	let textFileSource = $state('');
+	/** @type {Record<string, boolean>} */
+	let savedSessionFiles = $state({});
+	let themePreference = $state(/** @type {import('$lib/theme/themePreference.js').ThemePreference} */ ('dark'));
+	/** @type {HTMLInputElement | null} */
+	let workspaceImportInput = $state(null);
 
 	const LAST_OPEN_FILE_KEY = 'nb-last-open-file-v1';
+	const CURRENT_DIR_KEY = 'nb-current-dir-v1';
 
 	/** @param {import('$lib/vfs/types.js').VfsSnapshot} snap */
 	function bumpSnapshot(snap) {
@@ -193,14 +218,18 @@
 				await flushKernelToFile(activeFileId);
 			}
 			activeFileId = fileId;
+			editorMode = 'notebook';
 			notebook = parseNotebook(rawContent);
 			cellOutputs = cellOutputsFromNotebook(notebook.cells);
 			importSessionSourceId = '';
+			const node = snapshot ? getNode(snapshot, fileId) : null;
+			if (node?.parentId) currentDirId = node.parentId;
 			if (typeof localStorage !== 'undefined') {
 				localStorage.setItem(LAST_OPEN_FILE_KEY, fileId);
 			}
 			await switchKernelToFile(fileId);
 		} else {
+			editorMode = 'notebook';
 			notebook = parseNotebook(rawContent);
 			cellOutputs = cellOutputsFromNotebook(notebook.cells);
 		}
@@ -267,9 +296,12 @@
 				await saveSnapshot(loaded);
 			}
 			snapshot = bumpSnapshot(loaded);
+			currentDirId =
+				(typeof sessionStorage !== 'undefined' && sessionStorage.getItem(CURRENT_DIR_KEY)) ||
+				loaded.rootId;
 
-			const notebooks = listChildren(loaded, loaded.rootId).filter(
-				(n) => n.type === 'file' && n.name.endsWith('.ipynb.json')
+			const notebooks = loaded.nodes.filter(
+				(n) => n.type === 'file' && isNotebookFileName(n.name)
 			);
 			const lastOpenId =
 				typeof localStorage !== 'undefined'
@@ -280,6 +312,7 @@
 			if (preferred) {
 				await selectFile(preferred.id, preferred.content ?? '');
 			}
+			await refreshSavedSessionHints();
 		} catch (error) {
 			workspaceLoadError =
 				error instanceof Error ? error.message : 'Could not load workspace from IndexedDB.';
@@ -291,7 +324,20 @@
 			if (starter) {
 				await selectFile(starter.id, starter.content ?? '');
 			}
+			currentDirId = empty.rootId;
 		}
+	});
+
+	onMount(() => {
+		themePreference = loadThemePreference();
+		applyResolvedTheme(resolveTheme(themePreference));
+		const unwatchTheme = watchSystemTheme(themePreference, (resolved) => {
+			applyResolvedTheme(resolved);
+			void import('$lib/editor/monacoSetup.js').then(({ ensureMonacoReady, applyMonacoThemeFromDocument }) =>
+				ensureMonacoReady().then((m) => m && applyMonacoThemeFromDocument(m))
+			);
+		});
+		return unwatchTheme;
 	});
 
 	onMount(() => {
@@ -765,12 +811,88 @@
 		focusCell(cell.id);
 	}
 
-	async function addNotebook() {
+	async function refreshSavedSessionHints() {
 		if (!snapshot) return;
+		/** @type {Record<string, boolean>} */
+		const hints = {};
+		for (const node of snapshot.nodes) {
+			if (node.type !== 'file' || !isNotebookFileName(node.name)) continue;
+			const session = await loadKernelSession(node.id);
+			hints[node.id] = Boolean(session.pickleCheckpoint || session.journal.length);
+		}
+		savedSessionFiles = hints;
+	}
+
+	function runningForFile(fileId) {
+		if (activeFileId === fileId && (pyodideStatus === 'ready' || running || pyodideStatus === 'loading')) {
+			return 'active';
+		}
+		if (savedSessionFiles[fileId]) return 'saved';
+		return null;
+	}
+
+	async function persistVfs() {
+		if (!snapshot) return;
+		await saveSnapshot(snapshot);
+		snapshot = bumpSnapshot(snapshot);
+		await refreshSavedSessionHints();
+	}
+
+	/** @param {import('$lib/vfs/types.js').VfsNode} node */
+	function openVfsNode(node) {
+		if (node.type === 'directory') {
+			currentDirId = node.id;
+			if (typeof sessionStorage !== 'undefined') {
+				sessionStorage.setItem(CURRENT_DIR_KEY, node.id);
+			}
+			return;
+		}
+		if (isNotebookFileName(node.name)) {
+			void selectFile(node.id, node.content ?? '');
+			return;
+		}
+		activeFileId = node.id;
+		editorMode = 'text';
+		textFileSource = node.content ?? '';
+		notebook = null;
+	}
+
+	function closeTextEditor() {
+		editorMode = 'notebook';
+		const nb = snapshot ? findOpenNotebookNode() : null;
+		if (nb) void selectFile(nb.id, nb.content ?? '');
+	}
+
+	/** @returns {import('$lib/vfs/types.js').VfsNode | null} */
+	function findOpenNotebookNode() {
+		if (!snapshot) return null;
+		if (activeFileId && editorMode === 'notebook') {
+			return getNode(snapshot, activeFileId);
+		}
+		return snapshot.nodes.find(
+			(n) => n.type === 'file' && isNotebookFileName(n.name) && n.id === activeFileId
+		) ?? findAnyNotebookNode();
+	}
+
+	function findAnyNotebookNode() {
+		if (!snapshot) return null;
+		const nodes = snapshot.nodes.filter((n) => n.type === 'file' && isNotebookFileName(n.name));
+		return nodes[0] ?? null;
+	}
+
+	async function saveTextFileContent() {
+		if (!snapshot || !activeFileId || editorMode !== 'text') return;
+		writeFile(snapshot, activeFileId, textFileSource);
+		await persistVfs();
+	}
+
+	async function handleNewNotebookInDir() {
+		if (!snapshot) return;
+		const parentId = currentDirId || snapshot.rootId;
 		const file = createNode(
 			snapshot,
-			snapshot.rootId,
-			`untitled-${files.length + 1}.ipynb.json`,
+			parentId,
+			`untitled-${randomId().slice(0, 6)}.ipynb.json`,
 			'file',
 			serializeNotebook({
 				version: 1,
@@ -780,8 +902,125 @@
 				]
 			})
 		);
-		await persistWorkspaceTree();
+		await persistVfs();
 		await selectFile(file.id, file.content ?? '');
+	}
+
+	async function handleNewFolder() {
+		if (!snapshot) return;
+		const name = window.prompt('Folder name', 'newfolder');
+		if (!name) return;
+		mkdir(snapshot, currentDirId || snapshot.rootId, name);
+		await persistVfs();
+	}
+
+	/** @param {FileList} fileList */
+	async function handleUpload(fileList) {
+		if (!snapshot) return;
+		const parentId = currentDirId || snapshot.rootId;
+		for (const file of fileList) {
+			const text = await file.text();
+			const safe = file.name.replace(/[^\w.\-]+/g, '-');
+			try {
+				createNode(snapshot, parentId, safe, 'file', text);
+			} catch {
+				createNode(snapshot, parentId, `${randomId().slice(0, 4)}-${safe}`, 'file', text);
+			}
+		}
+		await persistVfs();
+	}
+
+	/** @param {string} nodeId @param {string} name */
+	async function handleRenameNode(nodeId, name) {
+		if (!snapshot) return;
+		rename(snapshot, nodeId, name);
+		await persistVfs();
+	}
+
+	/** @param {string} nodeId */
+	async function handleDeleteNode(nodeId) {
+		if (!snapshot) return;
+		const node = getNode(snapshot, nodeId);
+		if (!node) return;
+		if (!window.confirm(`Delete ${node.name}?`)) return;
+		if (isNotebookFileName(node.name)) {
+			await clearKernelSession(nodeId);
+		}
+		try {
+			unlink(snapshot, nodeId, { recursive: true });
+		} catch (error) {
+			window.alert(error instanceof Error ? error.message : 'Delete failed.');
+			return;
+		}
+		if (activeFileId === nodeId) {
+			activeFileId = '';
+			notebook = null;
+			editorMode = 'notebook';
+		}
+		await persistVfs();
+		const fallback = findAnyNotebookNode();
+		if (fallback) await selectFile(fallback.id, fallback.content ?? '');
+	}
+
+	/** @param {string} nodeId */
+	async function handleDuplicateNode(nodeId) {
+		if (!snapshot) return;
+		duplicateFile(snapshot, nodeId);
+		await persistVfs();
+	}
+
+	/** @param {string} nodeId */
+	function handleDownloadNode(nodeId) {
+		if (!snapshot) return;
+		const node = getNode(snapshot, nodeId);
+		if (!node || node.type !== 'file') return;
+		downloadTextFile(node.name, node.content ?? '');
+	}
+
+	function exportWorkspaceBundle() {
+		if (!snapshot) return;
+		downloadTextFile('workspace.bundle.json', serializeWorkspaceBundle(snapshot));
+	}
+
+	function triggerWorkspaceImport() {
+		workspaceImportInput?.click();
+	}
+
+	/** @param {Event} event */
+	async function handleWorkspaceImport(event) {
+		const input = /** @type {HTMLInputElement} */ (event.currentTarget);
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		const parsed = parseWorkspaceBundle(await file.text());
+		if (!parsed) {
+			window.alert('Invalid workspace bundle.');
+			return;
+		}
+		if (!window.confirm('Replace entire workspace with imported bundle?')) return;
+		snapshot = bumpSnapshot(parsed);
+		await persistVfs();
+		currentDirId = snapshot.rootId;
+		const nb = findAnyNotebookNode();
+		if (nb) await selectFile(nb.id, nb.content ?? '');
+	}
+
+	function setThemePreference(/** @type {import('$lib/theme/themePreference.js').ThemePreference} */ next) {
+		themePreference = next;
+		saveThemePreference(next);
+		const resolved = resolveTheme(next);
+		applyResolvedTheme(resolved);
+		void (async () => {
+			const { ensureMonacoReady, applyMonacoThemeFromDocument } = await import(
+				'$lib/editor/monacoSetup.js'
+			);
+			const monaco = await ensureMonacoReady();
+			if (monaco) applyMonacoThemeFromDocument(monaco);
+		})();
+	}
+
+	async function addNotebook() {
+		await handleNewNotebookInDir();
 	}
 
 	function triggerImport() {
@@ -805,12 +1044,12 @@
 		const safeName = file.name.replace(/[^\w.\-]+/g, '-').replace(/-+/g, '-');
 		const node = createNode(
 			snapshot,
-			snapshot.rootId,
-			safeName.endsWith('.json') ? safeName : `${safeName}.ipynb.json`,
+			currentDirId || snapshot.rootId,
+			safeName.endsWith('.json') ? safeName : `${safeName.replace(/\.ipynb$/i, '')}.ipynb.json`,
 			'file',
 			serializeNotebook(imported)
 		);
-		await persistWorkspaceTree();
+		await persistVfs();
 		await selectFile(node.id, node.content ?? '');
 	}
 
@@ -829,12 +1068,20 @@
 
 	const files = $derived.by(() => {
 		if (!snapshot) return [];
-		return listChildren(snapshot, snapshot.rootId).filter((n) => n.type === 'file');
+		return snapshot.nodes.filter((n) => n.type === 'file' && isNotebookFileName(n.name));
 	});
 
 	const activeName = $derived.by(() => {
-		const file = files.find((f) => f.id === activeFileId);
-		return file?.name ?? 'notebook';
+		if (!snapshot) return 'notebook';
+		if (activeFileId) {
+			const node = snapshot.nodes.find((n) => n.id === activeFileId);
+			if (node) {
+				return node.name.endsWith('.ipynb.json')
+					? node.name.replace(/\.ipynb\.json$/, '.ipynb')
+					: node.name;
+			}
+		}
+		return 'notebook';
 	});
 
 	const otherSessionSources = $derived.by(() => files.filter((file) => file.id !== activeFileId));
@@ -885,8 +1132,15 @@
 	class="nb-sr-only"
 	onchange={handleImportFile}
 />
+<input
+	bind:this={workspaceImportInput}
+	type="file"
+	accept=".json,application/json"
+	class="nb-sr-only"
+	onchange={handleWorkspaceImport}
+/>
 
-{#if !snapshot || !notebook}
+{#if !snapshot}
 	<p class="nb-loading">mounting workspace…</p>
 {:else}
 	<div class="nb-app">
@@ -925,6 +1179,14 @@
 						<button type="button" onclick={() => toggleFullWidth()}>
 							{fullWidthNotebook ? 'Standard width' : 'Full width'}
 						</button>
+						<hr class="nb-menu-divider" />
+						<span class="nb-menu-label">Theme</span>
+						<button type="button" class:nb-menu-active={themePreference === 'dark'} onclick={() => setThemePreference('dark')}>Dark</button>
+						<button type="button" class:nb-menu-active={themePreference === 'light'} onclick={() => setThemePreference('light')}>Light</button>
+						<button type="button" class:nb-menu-active={themePreference === 'system'} onclick={() => setThemePreference('system')}>System</button>
+						<hr class="nb-menu-divider" />
+						<button type="button" onclick={exportWorkspaceBundle}>Export workspace</button>
+						<button type="button" onclick={triggerWorkspaceImport}>Import workspace</button>
 					</div>
 				</details>
 			</div>
@@ -972,27 +1234,30 @@
 						Running
 					</button>
 				</div>
-				{#if railTab === 'files'}
-				<div class="nb-rail__head">
-					<p class="nb-rail__label">local store</p>
-					<p class="nb-rail__hint">Notebooks live in IndexedDB on this device.</p>
-				</div>
-				<ul class="nb-filelist">
-					{#each files as file (file.id)}
-						<li>
-							<button
-								type="button"
-								aria-current={file.id === activeFileId ? 'page' : undefined}
-								onclick={() => void selectFile(file.id, file.content ?? '')}
-							>
-								{file.name}
-							</button>
-						</li>
-					{/each}
-				</ul>
-				<div class="nb-rail__foot">
-					<button type="button" class="nb-new-btn" onclick={addNotebook}>+ new notebook</button>
-				</div>
+				{#if railTab === 'files' && snapshot}
+				<FileBrowser
+					{snapshot}
+					currentDirId={currentDirId || snapshot.rootId}
+					{activeFileId}
+					runningForFile={runningForFile}
+					onnavigate={(dirId) => {
+						currentDirId = dirId;
+						if (typeof sessionStorage !== 'undefined') {
+							sessionStorage.setItem(CURRENT_DIR_KEY, dirId);
+						}
+					}}
+					onopen={openVfsNode}
+					onnewnotebook={() => void handleNewNotebookInDir()}
+					onnewfolder={() => void handleNewFolder()}
+					onupload={(files) => void handleUpload(files)}
+					onrefresh={() => void refreshSavedSessionHints()}
+					onrename={(id, name) => void handleRenameNode(id, name)}
+					ondelete={(id) => void handleDeleteNode(id)}
+					onduplicate={(id) => void handleDuplicateNode(id)}
+					ondownload={handleDownloadNode}
+				/>
+				{:else if railTab === 'files'}
+				<p class="nb-rail__hint">Loading workspace…</p>
 				{:else}
 				<div class="nb-rail__head">
 					<p class="nb-rail__label">running</p>
@@ -1019,6 +1284,15 @@
 			></button>
 
 			<div class="nb-canvas">
+				{#if editorMode === 'text' && snapshot}
+					{@const textNode = getNode(snapshot, activeFileId)}
+					<TextFileEditor
+						fileName={textNode?.name ?? 'file'}
+						bind:value={textFileSource}
+						onchange={() => void saveTextFileContent()}
+						onclose={closeTextEditor}
+					/>
+				{:else if notebook}
 				{#if !notebookTrusted}
 					<div class="nb-restore-banner nb-restore-banner--trust" role="status">
 						<strong>Not trusted</strong>
@@ -1181,6 +1455,9 @@
 						</div>
 					{/each}
 				</div>
+				{:else}
+					<p class="nb-loading">Open a notebook from the file browser.</p>
+				{/if}
 			</div>
 
 			<button
@@ -1213,7 +1490,8 @@
 		</div>
 
 		<footer class="nb-statusbar">
-			<span>cells {notebook.cells.length}</span>
+			<span>cells {notebook?.cells.length ?? 0}</span>
+			<span>theme · {themePreference}</span>
 			<span>wasm · pyodide 0.29</span>
 		</footer>
 	</div>

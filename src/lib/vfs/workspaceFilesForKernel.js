@@ -1,22 +1,4 @@
-import { getNode } from './vfsTree.js';
-
-/**
- * @param {import('./types.js').VfsSnapshot} snapshot
- * @param {import('./types.js').VfsNode} node
- * @returns {string}
- */
-function filePathForNode(snapshot, node) {
-	/** @type {string[]} */
-	const parts = [node.name];
-	let parentId = node.parentId;
-	while (parentId) {
-		const parent = getNode(snapshot, parentId);
-		if (!parent || parent.parentId === null) break;
-		parts.unshift(parent.name);
-		parentId = parent.parentId;
-	}
-	return parts.join('/');
-}
+import { filePathForNode } from './vfsPaths.js';
 
 /**
  * @param {import('./types.js').VfsSnapshot} snapshot

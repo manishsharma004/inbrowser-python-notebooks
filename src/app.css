@@ -1,6 +1,7 @@
 @import url('https://cdn.jsdelivr.net/npm/@vscode/codicons@0.0.36/dist/codicon.css');
 
-:root {
+:root,
+[data-theme='dark'] {
 	--bg: #0f0e0c;
 	--bg-elevated: #141311;
 	--rail: #11100e;
@@ -21,12 +22,42 @@
 	--kernel-ready: #5cb87a;
 	--focus-ring: #007fd4;
 	--vscode-suggest-selected: #04395e;
+	--figure-bg: #ffffff;
 	--font-ui: 'IBM Plex Sans', 'Segoe UI', sans-serif;
 	--font-mono: 'IBM Plex Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
 	--rail-width: 15.5rem;
 	--session-width: 19rem;
 	--pane-splitter-size: 5px;
 	--cell-gutter: 2.75rem;
+}
+
+[data-theme='light'] {
+	--bg: #f3f3f3;
+	--bg-elevated: #ffffff;
+	--rail: #ececec;
+	--cell-bg: #ffffff;
+	--cell-focus: #f8f8f8;
+	--border: #e5e5e5;
+	--border-strong: #cfcfcf;
+	--ink: #333333;
+	--ink-dim: #616161;
+	--ink-faint: #8a8a8a;
+	--run: #b8860b;
+	--run-hover: #c9940c;
+	--run-ink: #1a1608;
+	--ok: #388a4a;
+	--err: #c6533d;
+	--kernel-idle: #8a8a8a;
+	--kernel-busy: #b8860b;
+	--kernel-ready: #388a4a;
+	--focus-ring: #0078d4;
+	--vscode-suggest-selected: #0060c0;
+	--figure-bg: #ffffff;
+	color-scheme: light;
+}
+
+[data-theme='dark'] {
+	color-scheme: dark;
 }
 
 @font-face {
@@ -525,7 +556,7 @@ body.nb-resize-active {
 	height: auto;
 	border: 1px solid var(--border-strong);
 	border-radius: 2px;
-	background: #fff;
+	background: var(--figure-bg);
 }
 
 .nb-run-meta {
@@ -1213,4 +1244,209 @@ body.nb-resize-active {
 .nb-md-cell,
 .nb-raw-cell {
 	min-width: 0;
+}
+
+/* —— File browser (JupyterLab-style) —— */
+
+.nb-filebrowser {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	padding: 0.35rem 0.5rem 0.75rem;
+	min-height: 0;
+	flex: 1;
+	overflow: hidden;
+}
+
+.nb-filebrowser__toolbar {
+	display: flex;
+	gap: 0.2rem;
+	flex-wrap: wrap;
+}
+
+.nb-filebrowser__btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 1.75rem;
+	height: 1.75rem;
+	padding: 0 0.35rem;
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	background: var(--bg-elevated);
+	color: var(--ink-dim);
+}
+
+.nb-filebrowser__btn--primary {
+	background: var(--focus-ring);
+	border-color: var(--focus-ring);
+	color: #fff;
+}
+
+.nb-filebrowser__crumb {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.15rem;
+	font-family: var(--font-mono);
+	font-size: 0.6875rem;
+	color: var(--ink-dim);
+}
+
+.nb-filebrowser__crumb button {
+	border: none;
+	background: none;
+	padding: 0.1rem 0.2rem;
+	color: inherit;
+}
+
+.nb-filebrowser__crumb button:hover {
+	color: var(--ink);
+}
+
+.nb-filebrowser__crumb-sep {
+	opacity: 0.5;
+}
+
+.nb-filebrowser__filter {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	padding: 0.2rem 0.35rem;
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	background: var(--cell-bg);
+	font-size: 0.75rem;
+}
+
+.nb-filebrowser__filter input {
+	flex: 1;
+	border: none;
+	background: transparent;
+	color: var(--ink);
+	min-width: 0;
+}
+
+.nb-filebrowser__table {
+	flex: 1;
+	overflow: auto;
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	background: var(--cell-bg);
+}
+
+.nb-filebrowser__head,
+.nb-filebrowser__row {
+	display: grid;
+	grid-template-columns: 1fr 5.5rem;
+	align-items: center;
+}
+
+.nb-filebrowser__head button {
+	text-align: left;
+	padding: 0.35rem 0.5rem;
+	border: none;
+	border-bottom: 1px solid var(--border-strong);
+	background: var(--rail);
+	font-size: 0.6875rem;
+	color: var(--ink-dim);
+}
+
+.nb-filebrowser__row {
+	padding: 0.25rem 0.5rem;
+	font-size: 0.75rem;
+	cursor: default;
+	border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.nb-filebrowser__row:hover {
+	background: color-mix(in srgb, var(--focus-ring) 8%, transparent);
+}
+
+.nb-filebrowser__row--selected {
+	background: color-mix(in srgb, var(--focus-ring) 22%, var(--cell-bg));
+	color: var(--ink);
+}
+
+.nb-filebrowser__col-name {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nb-filebrowser__col-mod {
+	font-family: var(--font-mono);
+	font-size: 0.625rem;
+	color: var(--ink-faint);
+}
+
+.nb-filebrowser__running {
+	width: 0.45rem;
+	height: 0.45rem;
+	border-radius: 50%;
+	background: var(--ok);
+	opacity: 0.45;
+	flex-shrink: 0;
+}
+
+.nb-filebrowser__running--active {
+	opacity: 1;
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 35%, transparent);
+}
+
+.nb-filebrowser__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+}
+
+.nb-textfile {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 0.5rem;
+}
+
+.nb-textfile__head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 0.35rem;
+}
+
+.nb-textfile__name {
+	font-family: var(--font-mono);
+	font-size: 0.8125rem;
+}
+
+.nb-textfile__editor {
+	flex: 1;
+	min-height: 12rem;
+}
+
+.nb-menu-divider {
+	border: none;
+	border-top: 1px solid var(--border);
+	margin: 0.35rem 0;
+}
+
+.nb-menu-label {
+	display: block;
+	padding: 0.15rem 0.5rem;
+	font-size: 0.6875rem;
+	color: var(--ink-faint);
+}
+
+.nb-menu-active {
+	background: color-mix(in srgb, var(--focus-ring) 15%, transparent);
+}
+
+.nb-rail {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
 }

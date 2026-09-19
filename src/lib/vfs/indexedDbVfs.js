@@ -10,12 +10,20 @@ const DEFAULT_WORKSPACE_ID = 'default';
 /** @type {Promise<IDBDatabase | null> | null} */
 let databasePromise = null;
 
+export { filePathForNode } from './vfsPaths.js';
 export {
 	createNode,
+	duplicateFile,
 	ensureStarterDataFiles,
 	ensureStarterNotebook,
 	getNode,
 	listChildren,
+	mkdir,
+	move,
+	readFile,
+	rename,
+	stat,
+	unlink,
 	writeFile
 } from './vfsTree.js';
 export { emptySnapshot } from './vfsTree.js';

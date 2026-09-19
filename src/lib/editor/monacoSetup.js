@@ -24,17 +24,18 @@ let featuresRegistered = false;
 /**
  * @param {typeof import('monaco-editor')} monaco
  */
-function registerNotebookTheme(monaco) {
-	monaco.editor.defineTheme('notebook-py', {
+function registerNotebookThemes(monaco) {
+	const darkRules = [
+		{ token: 'comment', foreground: '6a9955' },
+		{ token: 'string', foreground: 'ce9178' },
+		{ token: 'keyword', foreground: '569cd6' },
+		{ token: 'number', foreground: 'b5cea8' },
+		{ token: 'delimiter', foreground: 'd4d4d4' }
+	];
+	monaco.editor.defineTheme('notebook-py-dark', {
 		base: 'vs-dark',
 		inherit: true,
-		rules: [
-			{ token: 'comment', foreground: '6a9955' },
-			{ token: 'string', foreground: 'ce9178' },
-			{ token: 'keyword', foreground: '569cd6' },
-			{ token: 'number', foreground: 'b5cea8' },
-			{ token: 'delimiter', foreground: 'd4d4d4' }
-		],
+		rules: darkRules,
 		colors: {
 			'editor.background': '#181715',
 			'editor.foreground': '#e8e2d6',
@@ -52,6 +53,48 @@ function registerNotebookTheme(monaco) {
 			'editorSuggestWidget.foreground': '#cccccc'
 		}
 	});
+	monaco.editor.defineTheme('notebook-py-light', {
+		base: 'vs',
+		inherit: true,
+		rules: darkRules,
+		colors: {
+			'editor.background': '#ffffff',
+			'editor.foreground': '#3b3b3b',
+			'editorLineNumber.foreground': '#9d9d9d',
+			'editorLineNumber.activeForeground': '#6e6e6e',
+			'editor.selectionBackground': '#add6ff80',
+			'editor.lineHighlightBackground': '#f5f5f5',
+			'editorCursor.foreground': '#b8860b',
+			'editorWidget.background': '#f3f3f3',
+			'editorWidget.border': '#e5e5e5',
+			'editorSuggestWidget.background': '#f3f3f3',
+			'editorSuggestWidget.border': '#e5e5e5',
+			'editorSuggestWidget.selectedBackground': '#0060c0',
+			'editorSuggestWidget.highlightForeground': '#0066bf',
+			'editorSuggestWidget.foreground': '#333333'
+		}
+	});
+}
+
+/** @returns {'notebook-py-dark' | 'notebook-py-light'} */
+export function monacoThemeIdForResolved(resolved) {
+	return resolved === 'light' ? 'notebook-py-light' : 'notebook-py-dark';
+}
+
+/** @param {typeof import('monaco-editor')} monaco */
+export function applyMonacoTheme(monaco, resolved = 'dark') {
+	const id = monacoThemeIdForResolved(/** @type {'dark'|'light'} */ (resolved));
+	monaco.editor.setTheme(id);
+}
+
+/** @param {typeof import('monaco-editor')} monaco */
+export function applyMonacoThemeFromDocument(monaco) {
+	if (typeof document === 'undefined') {
+		applyMonacoTheme(monaco, 'dark');
+		return;
+	}
+	const resolved = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+	applyMonacoTheme(monaco, resolved);
 }
 
 /**
@@ -307,12 +350,12 @@ export async function ensureMonacoReady() {
 	const monaco = await monacoPromise;
 
 	if (!featuresRegistered) {
-		registerNotebookTheme(monaco);
+		registerNotebookThemes(monaco);
 		registerPythonFeatures(monaco);
 		featuresRegistered = true;
 	}
 
-	monaco.editor.setTheme('notebook-py');
+	applyMonacoThemeFromDocument(monaco);
 	return monaco;
 }
 
@@ -332,10 +375,16 @@ export async function createMonacoEditor(container, initialValue, options = {}) 
 	const monaco = await ensureMonacoReady();
 	if (!monaco) throw new Error('Monaco unavailable');
 
+	const resolved =
+		typeof document !== 'undefined' && document.documentElement.dataset.theme === 'light'
+			? 'light'
+			: 'dark';
+	const themeId = monacoThemeIdForResolved(resolved);
+
 	const editor = monaco.editor.create(container, {
 		value: initialValue,
 		language: 'python',
-		theme: 'notebook-py',
+		theme: themeId,
 		automaticLayout: true,
 		minimap: { enabled: false },
 		fontSize: 13,
