@@ -17,6 +17,8 @@
 	--kernel-idle: #5c564c;
 	--kernel-busy: #d4a017;
 	--kernel-ready: #5cb87a;
+	--focus-ring: #007fd4;
+	--vscode-suggest-selected: #04395e;
 	--font-ui: 'IBM Plex Sans', 'Segoe UI', sans-serif;
 	--font-mono: 'IBM Plex Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
 	--rail-width: 15.5rem;
@@ -883,4 +885,265 @@ body.nb-resize-active {
 .nb-editor--raw {
 	min-height: 4rem;
 	font-family: var(--font-mono);
+}
+
+/* —— VS Code–style notebook chrome —— */
+
+.nb-notebook-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	flex-wrap: wrap;
+}
+
+.nb-notebook-toolbar__primary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+.nb-toolbar-btn {
+	padding: 0.28rem 0.55rem;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--ink-dim);
+	font-size: 0.8125rem;
+	line-height: 1.2;
+}
+
+.nb-toolbar-btn:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--ink) 6%, transparent);
+	color: var(--ink);
+}
+
+.nb-toolbar-btn--active {
+	background: color-mix(in srgb, var(--focus-ring) 18%, var(--bg-elevated));
+	color: var(--ink);
+	border-color: color-mix(in srgb, var(--focus-ring) 35%, var(--border));
+}
+
+.nb-notebook-menu {
+	position: relative;
+}
+
+.nb-notebook-menu__trigger {
+	list-style: none;
+}
+
+.nb-notebook-menu__trigger::-webkit-details-marker {
+	display: none;
+}
+
+.nb-notebook-menu__panel,
+.nb-cell-menu__panel {
+	position: absolute;
+	top: calc(100% + 4px);
+	right: 0;
+	z-index: 20;
+	min-width: 10.5rem;
+	padding: 0.35rem;
+	border: 1px solid var(--border-strong);
+	border-radius: 4px;
+	background: var(--bg-elevated);
+	box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+}
+
+.nb-notebook-menu__panel button,
+.nb-cell-menu__panel button {
+	text-align: left;
+	padding: 0.35rem 0.5rem;
+	border: none;
+	border-radius: 2px;
+	background: transparent;
+	font-size: 0.8125rem;
+	color: var(--ink);
+}
+
+.nb-notebook-menu__panel button:hover:not(:disabled),
+.nb-cell-menu__panel button:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--focus-ring) 12%, var(--cell-bg));
+}
+
+.nb-kernel-picker {
+	font-size: 0.8125rem;
+	white-space: nowrap;
+}
+
+.nb-cell-stack {
+	margin-bottom: 0.15rem;
+}
+
+.nb-cell-insert {
+	display: flex;
+	justify-content: center;
+	height: 0.65rem;
+	position: relative;
+	z-index: 2;
+}
+
+.nb-cell-stack:hover .nb-cell-insert,
+.nb-cell-insert:focus-within {
+	height: 1.85rem;
+}
+
+.nb-cell-insert__bar {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateY(-2px);
+	transition: opacity 0.12s ease;
+}
+
+.nb-cell-stack:hover .nb-cell-insert__bar,
+.nb-cell-insert:focus-within .nb-cell-insert__bar {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.nb-cell-insert__btn {
+	padding: 0.2rem 0.55rem;
+	border: 1px solid var(--border-strong);
+	border-radius: 999px;
+	background: var(--bg-elevated);
+	color: var(--ink-dim);
+	font-size: 0.75rem;
+}
+
+.nb-cell-insert__btn:hover {
+	border-color: var(--focus-ring);
+	color: var(--ink);
+}
+
+.nb-cell-frame {
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--cell-bg);
+	margin: 0 0 0.35rem;
+	transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.nb-cell-frame--focused {
+	border-color: var(--focus-ring);
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus-ring) 45%, transparent);
+}
+
+.nb-cell-frame--collapsed .nb-cell-frame__body {
+	display: none;
+}
+
+.nb-cell-frame__head {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0.2rem 0.35rem;
+	border-bottom: 1px solid var(--border);
+	background: color-mix(in srgb, var(--bg) 40%, var(--cell-bg));
+}
+
+.nb-cell-frame__toolbar {
+	display: flex;
+	align-items: center;
+	gap: 0.1rem;
+	flex: 1;
+}
+
+.nb-cell-frame__index {
+	font-family: var(--font-mono);
+	font-size: 0.625rem;
+	color: var(--ink-faint);
+	padding-right: 0.25rem;
+}
+
+.nb-cell-frame__body {
+	position: relative;
+	padding: 0.35rem 0.35rem 1.35rem;
+}
+
+.nb-cell-frame__lang {
+	position: absolute;
+	right: 0.55rem;
+	bottom: 0.35rem;
+	font-size: 0.6875rem;
+	color: var(--ink-faint);
+	pointer-events: none;
+}
+
+.nb-cell-frame__chevron {
+	display: block;
+	width: 0.45rem;
+	height: 0.45rem;
+	border-right: 1.5px solid var(--ink-dim);
+	border-bottom: 1.5px solid var(--ink-dim);
+	transform: rotate(-45deg) translateY(-1px);
+	transition: transform 0.12s ease;
+}
+
+.nb-cell-frame--collapsed .nb-cell-frame__chevron {
+	transform: rotate(45deg) translateY(-2px);
+}
+
+.nb-icon-btn {
+	min-width: 1.65rem;
+	height: 1.55rem;
+	padding: 0 0.35rem;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--ink-dim);
+	font-size: 0.72rem;
+	line-height: 1;
+}
+
+.nb-icon-btn:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--ink) 8%, transparent);
+	color: var(--ink);
+}
+
+.nb-icon-btn--active {
+	background: color-mix(in srgb, var(--focus-ring) 15%, transparent);
+	color: var(--ink);
+}
+
+.nb-icon-btn--danger:hover:not(:disabled) {
+	color: var(--err);
+}
+
+.nb-cell-menu {
+	position: relative;
+}
+
+.nb-cell-menu__trigger {
+	list-style: none;
+}
+
+.nb-cell-menu__trigger::-webkit-details-marker {
+	display: none;
+}
+
+.nb-cell-frame .nb-monaco-wrap {
+	border: none;
+	border-radius: 2px;
+	box-shadow: none;
+}
+
+.nb-cell-frame .nb-monaco-wrap:focus-within {
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus-ring) 35%, transparent);
+}
+
+.nb-cell-frame .nb-editor,
+.nb-cell-frame .nb-markdown-preview {
+	border: none;
+	background: transparent;
+}
+
+.nb-md-cell,
+.nb-raw-cell {
+	min-width: 0;
 }

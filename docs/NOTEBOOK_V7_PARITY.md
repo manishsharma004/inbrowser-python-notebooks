@@ -13,10 +13,15 @@ Client-only notebooks aligned with Jupyter Notebook v7 / try-jupyter **behavior*
 | **nbformat** | Import/export `.ipynb`: streams, PNG, HTML (stored), errors, `execution_count`, **raw** cells |
 | **Persisted outputs** | `lastRun` on code cells in `.ipynb.json` |
 | **Kernel UI** | Cold / busy / idle / restarting; **Running** rail tab |
-| **Notebook UI** | Trust banner, trusted **HTML** outputs, full width, TOC, collapsible **h2** sections |
+| **Notebook UI** | Trust banner, trusted **HTML** outputs, full width, **Outline**, collapsible **h2** sections |
+| **Cell chrome** | VS Code–style focus ring, hover **+ Code / + Markdown** inserts, in-cell run toolbar, collapse, **Python** badge |
 | **Cell ops** | Raw cells, duplicate, run all, clear outputs, run/advance shortcuts |
 | **Output UX** | Scrolled long text (~100 lines), inline matplotlib PNG |
 | **Tests** | Node unit tests + Playwright smoke (`npm run test:e2e`) |
+
+## Reference UX
+
+Visual and interaction patterns follow [VS Code Jupyter](https://github.com/microsoft/vscode-jupyter) / built-in notebook UI (cell toolbar, outline, kernel picker labels) adapted for **Pyodide WASM** without a Jupyter Server.
 
 ## Explicitly out of scope
 
