@@ -65,7 +65,7 @@
 	import TextFileEditor from '$lib/components/TextFileEditor.svelte';
 	import { attachNotebookKeymap } from '$lib/notebook/notebookKeymap.js';
 	import { cellIndexById, nextCellId, prevCellId } from '$lib/notebook/notebookCellNavigation.js';
-	import { focusNotebookCellEditor } from '$lib/editor/notebookEditorRegistry.js';
+	import { focusNotebookCellEditor, insertIntoActiveEditor, subscribeActiveEditorKind } from '$lib/editor/notebookEditorRegistry.js';
 	import { formatDuration, formatRunTimestamp } from '$lib/notebook/formatRunMeta.js';
 	import { randomId } from '$lib/utils/randomId.js';
 	import {
@@ -84,6 +84,13 @@
 		saveThemePreference,
 		watchSystemTheme
 	} from '$lib/theme/themePreference.js';
+	import MobileBottomNav from '$lib/components/MobileBottomNav.svelte';
+	import MobileCodeAccessory from '$lib/components/MobileCodeAccessory.svelte';
+	import { loadMobileTab, saveMobileTab } from '$lib/layout/mobileTabs.js';
+	import {
+		attachVisualViewportKeyboardOffset,
+		shouldShowCodeAccessory
+	} from '$lib/layout/useMobileShell.js';
 
 	/**
 	 * @typedef {Object} CellRunRecord
@@ -143,6 +150,11 @@
 	let themePreference = $state(/** @type {import('$lib/theme/themePreference.js').ThemePreference} */ ('dark'));
 	/** @type {HTMLInputElement | null} */
 	let workspaceImportInput = $state(null);
+	let mobileTab = $state(/** @type {import('$lib/layout/mobileTabs.js').MobileTab} */ ('notebook'));
+	let useMobileShell = $state(false);
+	let useTabletShell = $state(false);
+	let sessionDrawerOpen = $state(false);
+	let activeEditorKind = $state(/** @type {'monaco' | 'textarea' | null} */ (null));
 
 	const LAST_OPEN_FILE_KEY = 'nb-last-open-file-v1';
 	const CURRENT_DIR_KEY = 'nb-current-dir-v1';
@@ -244,6 +256,7 @@
 	/** @param {'rail' | 'session'} pane @param {PointerEvent} event */
 	function startPaneResize(pane, event) {
 		if (event.button !== 0) return;
+		if (typeof window !== 'undefined' && window.innerWidth <= 960) return;
 		event.preventDefault();
 		const handle = /** @type {HTMLElement} */ (event.currentTarget);
 		handle.setPointerCapture(event.pointerId);
@@ -279,6 +292,33 @@
 		handle.addEventListener('pointerup', onEnd);
 		handle.addEventListener('pointercancel', onEnd);
 	}
+
+	onMount(() => {
+		mobileTab = loadMobileTab();
+		if (typeof window === 'undefined') return;
+		const mobileMq = window.matchMedia('(max-width: 640px)');
+		const tabletMq = window.matchMedia('(min-width: 641px) and (max-width: 960px)');
+		const syncShell = () => {
+			useMobileShell = mobileMq.matches;
+			useTabletShell = tabletMq.matches;
+			if (!useMobileShell) sessionDrawerOpen = false;
+		};
+		syncShell();
+		mobileMq.addEventListener('change', syncShell);
+		tabletMq.addEventListener('change', syncShell);
+		const unsubEditorKind = subscribeActiveEditorKind((kind) => {
+			activeEditorKind = kind;
+		});
+		const detachViewport = attachVisualViewportKeyboardOffset((px) => {
+			document.documentElement.style.setProperty('--keyboard-offset', `${px}px`);
+		});
+		return () => {
+			mobileMq.removeEventListener('change', syncShell);
+			tabletMq.removeEventListener('change', syncShell);
+			unsubEditorKind();
+			detachViewport();
+		};
+	});
 
 	onMount(async () => {
 		const layout = loadPanelLayout();
@@ -847,6 +887,10 @@
 			}
 			return;
 		}
+		if (useMobileShell) {
+			mobileTab = 'notebook';
+			saveMobileTab('notebook');
+		}
 		if (isNotebookFileName(node.name)) {
 			void selectFile(node.id, node.content ?? '');
 			return;
@@ -1123,6 +1167,30 @@
 	const tocEntries = $derived.by(() =>
 		notebook ? tableOfContentsFromNotebook(notebook.cells) : []
 	);
+
+	/** @param {import('$lib/layout/mobileTabs.js').MobileTab} tab */
+	function selectMobileTab(tab) {
+		mobileTab = tab;
+		saveMobileTab(tab);
+	}
+
+	const showCodeAccessoryBar = $derived.by(() => {
+		if (!shouldShowCodeAccessory(activeEditorKind)) return false;
+		if (useMobileShell && mobileTab !== 'notebook') return false;
+		return editorMode === 'notebook' || editorMode === 'text';
+	});
+
+	function handleAccessoryInsert(text, selectionOffset = 0) {
+		void insertIntoActiveEditor(text, selectionOffset);
+	}
+
+	function handleAccessoryRun() {
+		if (activeCellId) void runCell(activeCellId);
+	}
+
+	function handleAccessoryRunAdvance() {
+		if (activeCellId) void runCellAndAdvance(activeCellId);
+	}
 </script>
 
 <input
@@ -1143,12 +1211,28 @@
 {#if !snapshot}
 	<p class="nb-loading">mounting workspace…</p>
 {:else}
-	<div class="nb-app">
+	<div
+		class="nb-app"
+		class:nb-shell--mobile={useMobileShell}
+		class:nb-shell--tablet={useTabletShell}
+		class:nb-shell--tab-notebook={useMobileShell && mobileTab === 'notebook'}
+		class:nb-shell--tab-files={useMobileShell && mobileTab === 'files'}
+	>
 		<header class="nb-topbar">
 			<div class="nb-topbar__brand">
 				<span class="nb-topbar__title">{activeName}</span>
 				<span class="nb-topbar__path">~/workspace</span>
 			</div>
+			{#if useTabletShell}
+				<button
+					type="button"
+					class="nb-toolbar-btn nb-topbar__session-btn"
+					class:nb-toolbar-btn--active={sessionDrawerOpen}
+					onclick={() => (sessionDrawerOpen = !sessionDrawerOpen)}
+				>
+					Session
+				</button>
+			{/if}
 			<div class="nb-topbar__actions nb-notebook-toolbar">
 				<div class="nb-notebook-toolbar__primary">
 					<button type="button" class="nb-toolbar-btn" onclick={() => addCell('code')}>+ Code</button>
@@ -1211,9 +1295,14 @@
 
 		<div
 			class="nb-body"
+			class:nb-body--mobile={useMobileShell}
 			style="--rail-width: {railWidth}px; --session-width: {sessionWidth}px"
 		>
-			<aside class="nb-rail" aria-label="Workspace files">
+			<aside
+				class="nb-rail"
+				class:nb-mobile-pane--active={!useMobileShell || mobileTab === 'files'}
+				aria-label="Workspace files"
+			>
 				<div class="nb-rail__tabs" role="tablist">
 					<button
 						type="button"
@@ -1283,10 +1372,14 @@
 				onpointerdown={(event) => startPaneResize('rail', event)}
 			></button>
 
-			<div class="nb-canvas">
+			<div
+				class="nb-canvas"
+				class:nb-mobile-pane--active={!useMobileShell || mobileTab === 'notebook'}
+			>
 				{#if editorMode === 'text' && snapshot}
 					{@const textNode = getNode(snapshot, activeFileId)}
 					<TextFileEditor
+						editorId={activeFileId || 'textfile'}
 						fileName={textNode?.name ?? 'file'}
 						bind:value={textFileSource}
 						onchange={() => void saveTextFileContent()}
@@ -1386,6 +1479,7 @@
 								{#snippet children()}
 									{#if cell.kind === 'markdown'}
 										<MarkdownCell
+											cellId={cell.id}
 											bind:value={cell.source}
 											mode={markdownModes[cell.id] ?? 'preview'}
 											label="Markdown cell {i + 1}"
@@ -1468,6 +1562,8 @@
 			></button>
 
 			<SessionPanel
+				mobilePaneActive={!useMobileShell || mobileTab === 'session'}
+				drawerOpen={useTabletShell && sessionDrawerOpen}
 				globals={sessionGlobals}
 				environ={sessionEnviron}
 				loading={sessionLoading || running}
@@ -1487,7 +1583,63 @@
 				onreplayjournal={replayJournalNow}
 				onclearsession={clearSavedSession}
 			/>
+			{#if useTabletShell && sessionDrawerOpen}
+				<button
+					type="button"
+					class="nb-session-drawer-backdrop"
+					aria-label="Close session panel"
+					onclick={() => (sessionDrawerOpen = false)}
+				></button>
+			{/if}
+
+			<div
+				class="nb-mobile-more"
+				class:nb-mobile-pane--active={useMobileShell && mobileTab === 'more'}
+				aria-label="More workspace options"
+			>
+				<p class="nb-mobile-more__title">Workspace</p>
+				<button type="button" class="nb-toolbar-btn" onclick={() => addCell('raw')}>+ Raw cell</button>
+				<button type="button" class="nb-toolbar-btn" onclick={() => interruptKernel()} disabled={!running}>
+					Interrupt
+				</button>
+				<button type="button" class="nb-toolbar-btn" onclick={triggerImport}>Import .ipynb</button>
+				<button type="button" class="nb-toolbar-btn" onclick={exportNotebookJson}>Export JSON</button>
+				<button type="button" class="nb-toolbar-btn" onclick={exportNotebookJupyter}>Export .ipynb</button>
+				<button type="button" class="nb-toolbar-btn" onclick={() => toggleFullWidth()}>
+					{fullWidthNotebook ? 'Standard width' : 'Full width'}
+				</button>
+				<button
+					type="button"
+					class="nb-toolbar-btn"
+					class:nb-toolbar-btn--active={showToc}
+					onclick={() => (showToc = !showToc)}
+				>
+					Outline
+				</button>
+				<p class="nb-mobile-more__title">Theme</p>
+				<button type="button" class="nb-toolbar-btn" class:nb-toolbar-btn--active={themePreference === 'dark'} onclick={() => setThemePreference('dark')}>Dark</button>
+				<button type="button" class="nb-toolbar-btn" class:nb-toolbar-btn--active={themePreference === 'light'} onclick={() => setThemePreference('light')}>Light</button>
+				<button type="button" class="nb-toolbar-btn" class:nb-toolbar-btn--active={themePreference === 'system'} onclick={() => setThemePreference('system')}>System</button>
+				<p class="nb-mobile-more__title">Bundle</p>
+				<button type="button" class="nb-toolbar-btn" onclick={exportWorkspaceBundle}>Export workspace</button>
+				<button type="button" class="nb-toolbar-btn" onclick={triggerWorkspaceImport}>Import workspace</button>
+			</div>
 		</div>
+
+		<MobileCodeAccessory
+			visible={showCodeAccessoryBar}
+			disabled={running}
+			oninsert={handleAccessoryInsert}
+			onrun={handleAccessoryRun}
+			onrunadvance={handleAccessoryRunAdvance}
+		/>
+		{#if useMobileShell}
+			<MobileBottomNav
+				active={mobileTab}
+				kernelBusy={running || pyodideStatus === 'loading'}
+				onselect={selectMobileTab}
+			/>
+		{/if}
 
 		<footer class="nb-statusbar">
 			<span>cells {notebook?.cells.length ?? 0}</span>

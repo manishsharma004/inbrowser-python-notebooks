@@ -19,6 +19,8 @@
 	 * @property {(sourceId: string) => void} [onimportsourcechange]
 	 * @property {() => void | Promise<void>} [onimportvariables]
 	 * @property {() => void | Promise<void>} [onimportvariablesoverwrite]
+	 * @property {boolean} [mobilePaneActive]
+	 * @property {boolean} [drawerOpen]
 	 */
 
 	/** @type {Props} */
@@ -40,7 +42,9 @@
 		importSourceId = '',
 		onimportsourcechange,
 		onimportvariables,
-		onimportvariablesoverwrite
+		onimportvariablesoverwrite,
+		mobilePaneActive = true,
+		drawerOpen = false
 	} = $props();
 
 	let tab = $state(/** @type {'globals' | 'environ'} */ ('globals'));
@@ -53,7 +57,12 @@
 	);
 </script>
 
-<aside class="nb-session" aria-label="Python session inspector">
+<aside
+	class="nb-session"
+	class:nb-mobile-pane--active={mobilePaneActive}
+	class:nb-session--drawer-open={drawerOpen}
+	aria-label="Python session inspector"
+>
 	<div class="nb-session__head">
 		<h2>Session</h2>
 		<p class="nb-session__hint">
