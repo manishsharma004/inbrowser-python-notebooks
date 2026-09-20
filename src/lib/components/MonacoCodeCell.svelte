@@ -1,6 +1,10 @@
 <script>
 	import { onDestroy, onMount } from 'svelte';
-	import { registerNotebookCellEditor } from '$lib/editor/notebookEditorRegistry.js';
+	import {
+		clearActiveNotebookEditor,
+		registerNotebookCellEditor,
+		setActiveNotebookEditor
+	} from '$lib/editor/notebookEditorRegistry.js';
 
 	/** @type {{
 	 *   cellId: string,
@@ -32,6 +36,8 @@
 	let syncing = false;
 	/** @type {(() => void) | undefined} */
 	let unregisterFocus;
+	/** @type {import('monaco-editor').IDisposable | undefined} */
+	let blurDisposable;
 
 	onMount(() => {
 		void (async () => {
@@ -47,13 +53,32 @@
 				onRunCell: () => onrun?.(),
 				onRunCellAdvance: () => (onrunadvance ?? onrun)?.(),
 				onRunCellAndInsertBelow: () => (onruninsertbelow ?? onrunadvance ?? onrun)?.(),
-				onFocus: () => onfocus?.()
+				onFocus: () => {
+					onfocus?.();
+					if (!editorHandle) return;
+					setActiveNotebookEditor({
+						kind: 'monaco',
+						cellId,
+						editor: editorHandle.editor,
+						getMonaco: () =>
+							import('$lib/editor/monacoSetup.js').then(async (mod) => {
+								const monaco = await mod.ensureMonacoReady();
+								if (!monaco) throw new Error('Monaco unavailable');
+								return monaco;
+							})
+					});
+				}
 			});
 			unregisterFocus = registerNotebookCellEditor(cellId, () => editorHandle?.editor.focus());
+			blurDisposable = editorHandle.editor.onDidBlurEditorWidget(() => {
+				clearActiveNotebookEditor(cellId);
+			});
 		})();
 	});
 
 	onDestroy(() => {
+		clearActiveNotebookEditor(cellId);
+		blurDisposable?.dispose();
 		unregisterFocus?.();
 		editorHandle?.dispose();
 		editorHandle = null;

@@ -381,14 +381,17 @@ export async function createMonacoEditor(container, initialValue, options = {}) 
 			: 'dark';
 	const themeId = monacoThemeIdForResolved(resolved);
 
+	const compactEditor =
+		typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
+
 	const editor = monaco.editor.create(container, {
 		value: initialValue,
 		language: 'python',
 		theme: themeId,
 		automaticLayout: true,
 		minimap: { enabled: false },
-		fontSize: 13,
-		lineHeight: 20,
+		fontSize: compactEditor ? 15 : 13,
+		lineHeight: compactEditor ? 22 : 20,
 		fontFamily: "'IBM Plex Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace",
 		padding: { top: 8, bottom: 8 },
 		scrollBeyondLastLine: false,

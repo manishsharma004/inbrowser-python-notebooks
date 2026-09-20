@@ -36,6 +36,7 @@ Grounded architecture lives in **`archify.md`** (regenerate with `npm run archif
 - **Tests:** `npm test` (Node built-in test runner); `npm run check` for Svelte/TS; `npm run test:e2e` (Playwright smoke — uses `preview:e2e` on port **43174**, not dev port 4174)
 - **Theme:** Dark / Light / System in notebook **⋯** menu (`nb-theme-preference-v1` in localStorage)
 - **Files:** JupyterLab-style file browser in left rail (folders, upload, modified column)
+- **Mobile (≤640px):** Bottom navigation replaces cramped rail strip; code accessory bar when editing on touch/narrow viewports
 
 ### Agent behavior (required)
 
