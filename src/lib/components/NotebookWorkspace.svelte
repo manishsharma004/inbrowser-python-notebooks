@@ -15,7 +15,7 @@
 		unlink,
 		writeFile
 	} from '$lib/vfs/indexedDbVfs.js';
-	import { emptySnapshot } from '$lib/vfs/vfsTree.js';
+	import { emptySnapshot, findSibling } from '$lib/vfs/vfsTree.js';
 	import { isNotebookFileName } from '$lib/vfs/vfsPaths.js';
 	import { parseWorkspaceBundle, serializeWorkspaceBundle } from '$lib/vfs/workspaceBundle.js';
 	import { parseNotebook, serializeNotebook } from '$lib/notebook/parseNotebook.js';
@@ -25,9 +25,10 @@
 	} from '$lib/notebook/notebookRunState.js';
 	import { shouldScrollOutput } from '$lib/notebook/nbformatOutputs.js';
 	import {
+		downloadJupyterNotebook,
 		downloadTextFile,
 		parseImportedNotebook,
-		toJupyterNotebook
+		vfsNotebookNameFromImport
 	} from '$lib/notebook/jupyterFormat.js';
 	import { tableOfContentsFromNotebook } from '$lib/notebook/tableOfContents.js';
 	import { sanitizeTrustedHtml } from '$lib/markdown/sanitizeHtml.js';
@@ -964,11 +965,29 @@
 		const parentId = currentDirId || snapshot.rootId;
 		for (const file of fileList) {
 			const text = await file.text();
-			const safe = file.name.replace(/[^\w.\-]+/g, '-');
+			const imported = parseImportedNotebook(text);
+			const content = imported ? serializeNotebook(imported) : text;
+			let name = imported
+				? vfsNotebookNameFromImport(file.name)
+				: file.name.replace(/[^\w.\-]+/g, '-');
+			let attempt = 0;
+			while (findSibling(snapshot, parentId, name)) {
+				attempt += 1;
+				if (imported) {
+					const stem = name.replace(/\.ipynb\.json$/i, '');
+					name = `${stem}-${attempt}.ipynb.json`;
+				} else {
+					const dot = name.lastIndexOf('.');
+					name =
+						dot > 0
+							? `${name.slice(0, dot)}-${attempt}${name.slice(dot)}`
+							: `${name}-${attempt}`;
+				}
+			}
 			try {
-				createNode(snapshot, parentId, safe, 'file', text);
+				createNode(snapshot, parentId, name, 'file', content);
 			} catch {
-				createNode(snapshot, parentId, `${randomId().slice(0, 4)}-${safe}`, 'file', text);
+				createNode(snapshot, parentId, `${randomId().slice(0, 4)}-${name}`, 'file', content);
 			}
 		}
 		await persistVfs();
@@ -1018,6 +1037,11 @@
 		if (!snapshot) return;
 		const node = getNode(snapshot, nodeId);
 		if (!node || node.type !== 'file') return;
+		if (isNotebookFileName(node.name)) {
+			const doc = parseNotebook(node.content ?? '');
+			downloadJupyterNotebook(node.name, doc);
+			return;
+		}
 		downloadTextFile(node.name, node.content ?? '');
 	}
 
@@ -1081,20 +1105,34 @@
 		const raw = await file.text();
 		const imported = parseImportedNotebook(raw);
 		if (!imported || imported.cells.length === 0) {
-			window.alert('Could not import notebook — expected .ipynb or .ipynb.json format.');
+			window.alert(
+				'Could not import notebook. Use a Jupyter `.ipynb` (nbformat 4) or this app\'s `.ipynb.json` workspace format.'
+			);
 			return;
 		}
 
-		const safeName = file.name.replace(/[^\w.\-]+/g, '-').replace(/-+/g, '-');
-		const node = createNode(
-			snapshot,
-			currentDirId || snapshot.rootId,
-			safeName.endsWith('.json') ? safeName : `${safeName.replace(/\.ipynb$/i, '')}.ipynb.json`,
-			'file',
-			serializeNotebook(imported)
-		);
-		await persistVfs();
-		await selectFile(node.id, node.content ?? '');
+		const parentId = currentDirId || snapshot.rootId;
+		let storageName = vfsNotebookNameFromImport(file.name);
+		let attempt = 0;
+		while (findSibling(snapshot, parentId, storageName)) {
+			attempt += 1;
+			const stem = storageName.replace(/\.ipynb\.json$/i, '');
+			storageName = `${stem}-${attempt}.ipynb.json`;
+		}
+
+		try {
+			const node = createNode(
+				snapshot,
+				parentId,
+				storageName,
+				'file',
+				serializeNotebook(imported)
+			);
+			await persistVfs();
+			await selectFile(node.id, node.content ?? '');
+		} catch (error) {
+			window.alert(error instanceof Error ? error.message : 'Import failed.');
+		}
 	}
 
 	function exportNotebookJson() {
@@ -1105,9 +1143,7 @@
 
 	function exportNotebookJupyter() {
 		if (!notebook) return;
-		const base = activeName.replace(/\.ipynb\.json$/i, '').replace(/\.ipynb$/i, '');
-		const jupyter = toJupyterNotebook(notebook);
-		downloadTextFile(`${base}.ipynb`, JSON.stringify(jupyter, null, 2));
+		downloadJupyterNotebook(activeName, notebook);
 	}
 
 	const files = $derived.by(() => {
@@ -1258,8 +1294,8 @@
 						<button type="button" onclick={() => addCell('raw')}>+ Raw cell</button>
 						<button type="button" onclick={() => interruptKernel()} disabled={!running}>Interrupt</button>
 						<button type="button" onclick={triggerImport}>Import .ipynb</button>
-						<button type="button" onclick={exportNotebookJson}>Export JSON</button>
-						<button type="button" onclick={exportNotebookJupyter}>Export .ipynb</button>
+						<button type="button" onclick={exportNotebookJson}>Export workspace (.ipynb.json)</button>
+						<button type="button" onclick={exportNotebookJupyter}>Export Jupyter (.ipynb)</button>
 						<button type="button" onclick={() => toggleFullWidth()}>
 							{fullWidthNotebook ? 'Standard width' : 'Full width'}
 						</button>
@@ -1606,8 +1642,8 @@
 					Interrupt
 				</button>
 				<button type="button" class="nb-toolbar-btn" onclick={triggerImport}>Import .ipynb</button>
-				<button type="button" class="nb-toolbar-btn" onclick={exportNotebookJson}>Export JSON</button>
-				<button type="button" class="nb-toolbar-btn" onclick={exportNotebookJupyter}>Export .ipynb</button>
+				<button type="button" class="nb-toolbar-btn" onclick={exportNotebookJson}>Export workspace (.ipynb.json)</button>
+				<button type="button" class="nb-toolbar-btn" onclick={exportNotebookJupyter}>Export Jupyter (.ipynb)</button>
 				<button type="button" class="nb-toolbar-btn" onclick={() => toggleFullWidth()}>
 					{fullWidthNotebook ? 'Standard width' : 'Full width'}
 				</button>

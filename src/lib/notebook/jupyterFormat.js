@@ -3,10 +3,33 @@
  */
 
 import { randomId } from '../utils/randomId.js';
+import { normalizeInternalNotebook } from './internalNotebook.js';
 import {
 	jupyterOutputsFromRunSnapshot,
 	runSnapshotFromJupyterOutputs
 } from './nbformatOutputs.js';
+
+/**
+ * @param {unknown} nbformat
+ * @returns {boolean}
+ */
+function nbformatIs4(nbformat) {
+	return nbformat === 4 || nbformat === '4' || Number(nbformat) === 4;
+}
+
+/**
+ * @param {unknown} cells
+ * @returns {boolean}
+ */
+export function looksLikeJupyterCells(cells) {
+	if (!Array.isArray(cells) || cells.length === 0) return false;
+	return cells.every(
+		(cell) =>
+			cell &&
+			typeof cell === 'object' &&
+			typeof /** @type {Record<string, unknown>} */ (cell).cell_type === 'string'
+	);
+}
 
 /**
  * @param {unknown} value
@@ -15,7 +38,9 @@ import {
 export function isJupyterNotebook(value) {
 	if (!value || typeof value !== 'object') return false;
 	const record = /** @type {Record<string, unknown>} */ (value);
-	return record.nbformat === 4 && Array.isArray(record.cells);
+	if (!Array.isArray(record.cells)) return false;
+	if (nbformatIs4(record.nbformat)) return true;
+	return looksLikeJupyterCells(record.cells);
 }
 
 /**
@@ -52,7 +77,7 @@ export function fromJupyterNotebook(raw, options = {}) {
 						: /** @type {'code'} */ ('code');
 			/** @type {import('./parseNotebook.js').NotebookCell} */
 			const mappedCell = {
-				id: createId(),
+				id: typeof cell.id === 'string' && cell.id ? cell.id : createId(),
 				kind,
 				source: normalizeJupyterSource(/** @type {string | string[]} */ (cell.source ?? ''))
 			};
@@ -102,19 +127,20 @@ export function toJupyterSourceLines(source) {
  * @returns {Record<string, unknown>}
  */
 export function toJupyterNotebook(doc) {
-	const trusted = doc.metadata?.trusted === true;
 	return {
 		nbformat: 4,
 		nbformat_minor: 5,
 		metadata: {
 			kernelspec: {
-				display_name: 'Python (Pyodide)',
+				display_name: 'Python 3',
 				language: 'python',
 				name: 'python3'
 			},
 			language_info: {
 				name: 'python',
-				pyodide: true
+				pygments_lexer: 'ipython3',
+				mimetype: 'text/x-python',
+				file_extension: '.py'
 			}
 		},
 		cells: doc.cells.map((cell) => {
@@ -123,6 +149,7 @@ export function toJupyterNotebook(doc) {
 			const cell_type =
 				cell.kind === 'markdown' ? 'markdown' : cell.kind === 'raw' ? 'raw' : 'code';
 			const base = {
+				id: cell.id,
 				cell_type,
 				metadata: cellMetadata,
 				source: toJupyterSourceLines(cell.source)
@@ -132,8 +159,7 @@ export function toJupyterNotebook(doc) {
 				return {
 					...base,
 					outputs,
-					execution_count: cell.lastRun?.executionCount ?? null,
-					trusted: trusted && cell.lastRun != null ? true : trusted
+					execution_count: cell.lastRun?.executionCount ?? null
 				};
 			}
 			return base;
@@ -151,13 +177,33 @@ export function parseImportedNotebook(raw) {
 		if (isJupyterNotebook(parsed)) {
 			return fromJupyterNotebook(/** @type {Record<string, unknown>} */ (parsed));
 		}
-		if (parsed && typeof parsed === 'object' && Array.isArray(parsed.cells)) {
-			return /** @type {NotebookDocument} */ (parsed);
-		}
+		return normalizeInternalNotebook(parsed);
 	} catch {
 		return null;
 	}
-	return null;
+}
+
+/**
+ * @param {string} fileName
+ * @returns {string}
+ */
+export function vfsNotebookNameFromImport(fileName) {
+	const safe = fileName.replace(/[^\w.\-]+/g, '-').replace(/-+/g, '-').trim();
+	if (!safe) return 'imported.ipynb.json';
+	if (safe.endsWith('.ipynb.json')) return safe;
+	if (safe.endsWith('.ipynb')) return `${safe.slice(0, -6)}.ipynb.json`;
+	if (safe.endsWith('.json')) {
+		return safe.endsWith('.ipynb.json') ? safe : `${safe.replace(/\.json$/i, '')}.ipynb.json`;
+	}
+	return `${safe}.ipynb.json`;
+}
+
+/**
+ * @param {NotebookDocument} doc
+ * @returns {string}
+ */
+export function serializeJupyterNotebookJson(doc) {
+	return JSON.stringify(toJupyterNotebook(doc), null, 2);
 }
 
 /**
@@ -173,4 +219,13 @@ export function downloadTextFile(filename, contents, mimeType = 'application/jso
 	anchor.download = filename;
 	anchor.click();
 	URL.revokeObjectURL(url);
+}
+
+/**
+ * @param {string} baseName
+ * @param {NotebookDocument} doc
+ */
+export function downloadJupyterNotebook(baseName, doc) {
+	const base = baseName.replace(/\.ipynb\.json$/i, '').replace(/\.ipynb$/i, '');
+	downloadTextFile(`${base}.ipynb`, serializeJupyterNotebookJson(doc));
 }
