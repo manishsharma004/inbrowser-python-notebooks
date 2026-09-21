@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<script>
+			(function () {
+				var k = 'nb-theme-preference-v1';
+				var p = localStorage.getItem(k) || 'dark';
+				var dark =
+					p === 'dark' || (p === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+				document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+				document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+			})();
+		</script>
+		<link rel="icon" href="/inbrowser-python-notebooks/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Python notebooks in the browser with Pyodide and IndexedDB storage." />
+		<link href="/inbrowser-python-notebooks/_app/immutable/entry/start.BwFcRkex.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/chunks/DCIqhSJS.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/chunks/RZEQnx7C.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/entry/app.fYsw23C1.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/chunks/uBIymjUX.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/chunks/xihTtKlq.js" rel="modulepreload">
+		<link href="/inbrowser-python-notebooks/_app/immutable/nodes/0.CjeDOg0e.js" rel="modulepreload">
+		
+		<link href="/inbrowser-python-notebooks/_app/immutable/assets/0.Kxv8wKqu.css" rel="stylesheet">
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">
+			<script>
+				{
+					__sveltekit_c5hrst = {
+						base: "/inbrowser-python-notebooks",
+						assets: "/inbrowser-python-notebooks"
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("/inbrowser-python-notebooks/_app/immutable/entry/start.BwFcRkex.js"),
+						import("/inbrowser-python-notebooks/_app/immutable/entry/app.fYsw23C1.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+				}
+			</script>
+		</div>
+	</body>
+</html>
