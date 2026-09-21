@@ -609,10 +609,10 @@
 
 	async function toggleFullWidth() {
 		if (!notebook) return;
-		const next = !notebook.metadata?.fullWidth;
+		const currentlyFull = notebook.metadata?.fullWidth !== false;
 		notebook = {
 			...notebook,
-			metadata: { ...notebook.metadata, fullWidth: next }
+			metadata: { ...notebook.metadata, fullWidth: currentlyFull ? false : true }
 		};
 		await persistNotebook();
 	}
@@ -1146,7 +1146,7 @@
 	});
 
 	const notebookTrusted = $derived.by(() => notebook?.metadata?.trusted !== false);
-	const fullWidthNotebook = $derived.by(() => notebook?.metadata?.fullWidth === true);
+	const fullWidthNotebook = $derived.by(() => notebook?.metadata?.fullWidth !== false);
 
 	const runningCellLabel = $derived.by(() => {
 		if (!runningCellId || !notebook) return null;
@@ -1426,7 +1426,10 @@
 						</button>
 					</div>
 				{/if}
-				<div class="nb-canvas__inner" class:nb-canvas__inner--full={fullWidthNotebook}>
+				<div
+					class="nb-canvas__inner"
+					class:nb-canvas__inner--constrained={!fullWidthNotebook}
+				>
 					{#if showToc && tocEntries.length > 0}
 						<nav class="nb-toc" aria-label="Outline">
 							<p class="nb-toc__title">Outline</p>

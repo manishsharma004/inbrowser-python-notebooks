@@ -135,6 +135,8 @@ button:disabled {
 .nb-app {
 	display: flex;
 	flex-direction: column;
+	width: 100%;
+	max-width: 100%;
 	min-height: 100vh;
 	max-height: 100vh;
 }
@@ -372,6 +374,15 @@ body.nb-resize-active {
 		display: none;
 	}
 
+	.nb-shell--mobile .nb-canvas {
+		padding: 0.5rem 0.65rem 2rem;
+	}
+
+	.nb-shell--mobile .nb-canvas__inner--constrained {
+		max-width: none;
+		margin: 0;
+	}
+
 	.nb-topbar__session-btn {
 		display: none;
 	}
@@ -518,17 +529,19 @@ body.nb-resize-active {
 
 .nb-canvas {
 	overflow: auto;
-	padding: 1.25rem 1.5rem 3rem;
+	padding: 1rem 1rem 3rem;
 	min-height: 0;
+	width: 100%;
 }
 
 .nb-canvas__inner {
-	max-width: 52rem;
-	margin: 0 auto;
+	width: 100%;
+	max-width: none;
 }
 
-.nb-canvas__inner--full {
-	max-width: none;
+.nb-canvas__inner--constrained {
+	max-width: 52rem;
+	margin: 0 auto;
 }
 
 .nb-restore-banner--trust {
