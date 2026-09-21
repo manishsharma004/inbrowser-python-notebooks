@@ -1,3 +1,6 @@
+import { parseImportedNotebook } from './jupyterFormat.js';
+import { serializeInternalNotebook } from './internalNotebook.js';
+
 /**
  * @typedef {import('./nbformatOutputs.js').CellRunSnapshot} CellRunSnapshot
  */
@@ -29,96 +32,31 @@
  * @property {NotebookDocumentMetadata} [metadata]
  */
 
-/**
- * @param {unknown} value
- * @returns {NotebookCellMetadata | undefined}
- */
-function parseCellMetadata(value) {
-	if (!value || typeof value !== 'object') return undefined;
-	const record = /** @type {Record<string, unknown>} */ (value);
-	if (record.scrolled === undefined) return undefined;
-	return { scrolled: /** @type {boolean | string} */ (record.scrolled) };
-}
-
-/**
- * @param {unknown} value
- * @returns {CellRunSnapshot | undefined}
- */
-function parseLastRun(value) {
-	if (!value || typeof value !== 'object') return undefined;
-	const record = /** @type {Record<string, unknown>} */ (value);
-	if (typeof record.executionCount !== 'number') return undefined;
+/** @returns {NotebookDocument} */
+function defaultNotebookDocument() {
 	return {
-		ok: record.ok !== false,
-		text: typeof record.text === 'string' ? record.text : '',
-		executionCount: record.executionCount,
-		figures: Array.isArray(record.figures)
-			? record.figures.filter((f) => typeof f === 'string')
-			: [],
-		html: Array.isArray(record.html) ? record.html.filter((h) => typeof h === 'string') : undefined,
-		stdout: typeof record.stdout === 'string' ? record.stdout : undefined,
-		stderr: typeof record.stderr === 'string' ? record.stderr : undefined,
-		startedAt: typeof record.startedAt === 'number' ? record.startedAt : undefined,
-		finishedAt: typeof record.finishedAt === 'number' ? record.finishedAt : undefined,
-		durationMs: typeof record.durationMs === 'number' ? record.durationMs : undefined
+		version: 1,
+		cells: [
+			{
+				id: 'cell-0',
+				kind: 'code',
+				source: 'print("Hello from Pyodide")\n'
+			}
+		]
 	};
 }
 
 /**
+ * Load notebook for the workspace (Jupyter `.ipynb` or internal `.ipynb.json`).
  * @param {string} raw
  * @returns {NotebookDocument}
  */
 export function parseNotebook(raw) {
-	try {
-		const parsed = JSON.parse(raw);
-		if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.cells)) {
-			throw new Error('Invalid notebook shape');
-		}
-		const metaRaw = /** @type {Record<string, unknown>} */ (parsed).metadata;
-		/** @type {NotebookDocumentMetadata | undefined} */
-		let metadata;
-		if (metaRaw && typeof metaRaw === 'object') {
-			const meta = /** @type {Record<string, unknown>} */ (metaRaw);
-			metadata = {};
-			if (typeof meta.trusted === 'boolean') metadata.trusted = meta.trusted;
-			if (typeof meta.fullWidth === 'boolean') metadata.fullWidth = meta.fullWidth;
-			if (Object.keys(metadata).length === 0) metadata = undefined;
-		}
-
-		return {
-			version: typeof parsed.version === 'number' ? parsed.version : 1,
-			metadata,
-			cells: parsed.cells.map((cell, index) => {
-				/** @type {Record<string, unknown>} */
-				const c = cell && typeof cell === 'object' ? cell : {};
-				const lastRun = parseLastRun(c.lastRun);
-				const cellMeta = parseCellMetadata(c.metadata);
-				return {
-					id: typeof c.id === 'string' ? c.id : `cell-${index}`,
-					kind:
-					c.kind === 'markdown'
-						? 'markdown'
-						: c.kind === 'raw'
-							? 'raw'
-							: 'code',
-					source: typeof c.source === 'string' ? c.source : '',
-					...(cellMeta ? { metadata: cellMeta } : {}),
-					...(lastRun ? { lastRun } : {})
-				};
-			})
-		};
-	} catch {
-		return {
-			version: 1,
-			cells: [
-				{
-					id: 'cell-0',
-					kind: 'code',
-					source: 'print("Hello from Pyodide")\n'
-				}
-			]
-		};
+	const imported = parseImportedNotebook(raw);
+	if (imported && imported.cells.length > 0) {
+		return imported;
 	}
+	return defaultNotebookDocument();
 }
 
 /**
@@ -126,5 +64,5 @@ export function parseNotebook(raw) {
  * @returns {string}
  */
 export function serializeNotebook(doc) {
-	return JSON.stringify(doc, null, 2);
+	return serializeInternalNotebook(doc);
 }
