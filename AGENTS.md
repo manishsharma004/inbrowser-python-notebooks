@@ -60,8 +60,8 @@ Grounded architecture lives in **`archify.md`** (regenerate with `npm run archif
 |------|--------|
 | Default feature branch | `cursor-agent/monaco-editor-intellisense-9cc7` |
 | Compare (branch vs `main`) | https://github.com/manishsharma004/inbrowser-python-notebooks/compare/main...cursor-agent/monaco-editor-intellisense-9cc7 |
-| Open PR | **#7** — https://github.com/manishsharma004/inbrowser-python-notebooks/pull/7 |
-| Note | **#6** merged 2026-09-19. **#4**–**#5** merged earlier. Agents must **create** a new PR when the prior one merged and the branch still has commits (see Agent behavior). |
+| Open PR | **#8** — https://github.com/manishsharma004/inbrowser-python-notebooks/pull/8 |
+| Note | **#7** merged 2026-09-19 (theme + filesystem). **#8** adds mobile UX. **#6** merged earlier. Agents must **create** a new PR when the prior one merged and the branch still has commits (see Agent behavior). |
 
 ### UI / manual checks
 
